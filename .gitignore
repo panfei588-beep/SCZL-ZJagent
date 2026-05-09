@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+
+# Node
+node_modules/
+*.log
+
+# Frontend build
+frontend/dist/
+backend/static/
+
+# Uploads
+backend/uploads/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env (keep example, ignore real)
+deploy/.env
+backend/.env
+
+# MinerU output
+mineru_output/
+
+# Mock
+mock_server.js
