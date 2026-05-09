@@ -97,7 +97,7 @@
       <template #header><span>步骤2：AI诊断分析</span></template>
       <div class="diagnosis-loading">
         <el-icon class="is-loading" :size="50" color="#409EFF"><Loading /></el-icon>
-        <h3>🤖 AI正在分析中，请稍候...</h3>
+        <h3>AI正在分析中，请稍候...</h3>
         <el-progress :percentage="diagnosisProgress" style="max-width:500px;margin:20px auto" />
         <div class="progress-steps">
           <div v-for="(step, idx) in progressSteps" :key="idx" class="progress-step">
@@ -126,7 +126,7 @@
 
       <!-- 根因诊断结果 -->
       <div v-if="diagnosisResult?.root_causes?.length">
-        <h4 style="margin:20px 0 12px">根因诊断结果</h4>
+        <h4 class="section-title">根因诊断结果</h4>
         <el-card
           v-for="cause in diagnosisResult.root_causes"
           :key="cause.rank"
@@ -160,7 +160,7 @@
 
       <!-- 相似案例 -->
       <div v-if="diagnosisResult?.similar_cases?.length">
-        <h4 style="margin:20px 0 12px">相似历史案例</h4>
+        <h4 class="section-title">相似历史案例</h4>
         <el-table :data="diagnosisResult.similar_cases" border stripe>
           <el-table-column prop="case_id" label="案例编号" width="110" />
           <el-table-column prop="title" label="案例标题" />
@@ -394,6 +394,8 @@ const reset = () => {
   padding: 30px;
   max-width: 1200px;
   margin: 0 auto;
+  background: var(--bg-page);
+  min-height: 100vh;
 }
 .steps {
   margin: 40px 0;
@@ -401,19 +403,26 @@ const reset = () => {
 .step-card {
   margin: 20px 0;
   min-height: 400px;
+  border-radius: var(--radius);
 }
 .params-form {
   margin-top: 24px;
   padding: 16px;
-  background: #f5f7fa;
-  border-radius: 8px;
+  background: var(--bg-light);
+  border-radius: var(--radius);
+}
+.params-form :deep(.el-form-item__content) {
+  width: calc(100% - 100px);
+}
+.params-form :deep(.el-select) {
+  width: 100%;
 }
 .data-preview {
   margin-top: 24px;
 }
 .data-preview h4 {
   margin-bottom: 12px;
-  color: #303133;
+  color: var(--text-primary);
 }
 .upload-info {
   margin-top: 16px;
@@ -440,6 +449,11 @@ const reset = () => {
   align-items: center;
   gap: 10px;
   font-size: 14px;
+  color: var(--text-regular);
+}
+.section-title {
+  margin: 20px 0 12px;
+  color: var(--text-primary);
 }
 .trend-section {
   margin: 24px 0;
@@ -466,7 +480,7 @@ const reset = () => {
   text-align: center;
 }
 .cost {
-  color: #E6A23C;
+  color: var(--warning);
   font-weight: bold;
 }
 </style>
