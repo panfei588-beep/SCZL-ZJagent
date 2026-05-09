@@ -6,7 +6,7 @@ python-multipart==0.0.20
 # LangChain
 langchain==0.3.14
 langchain-community==0.3.14
-langchain-core==0.3.28
+langchain-core==0.3.29
 
 # Qwen / DashScope
 dashscope==1.22.1
@@ -18,9 +18,10 @@ pymilvus==2.5.4
 mineru>=3.1.0
 
 # Data Processing
-pandas==2.2.3
+pandas>=2.3.3
 openpyxl==3.1.5
-numpy==2.2.1
+numpy<2
+opencv-python==4.11.0.86
 
 # Database
 sqlalchemy==2.0.36
