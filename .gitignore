@@ -28,6 +28,9 @@ Thumbs.db
 deploy/.env
 backend/.env
 
+# Server info (internal)
+服务器信息.xlsx
+
 # MinerU output
 mineru_output/
 
