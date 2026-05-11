@@ -31,5 +31,11 @@ backend/.env
 # MinerU output
 mineru_output/
 
+# Local tooling
+.claude/
+
+# Requirements docs (internal)
+需求/
+
 # Mock
 mock_server.js
