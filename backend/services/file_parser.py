@@ -21,8 +21,25 @@ async def parse_file(file_path: str, ext: str) -> dict[str, Any]:
 
 
 def _parse_excel(file_path: str) -> dict[str, Any]:
+    import math
+    import datetime
     df = pd.read_excel(file_path)
-    records = df.to_dict("records")
+    raw = df.to_dict("records")
+
+    def _safe(v: Any) -> Any:
+        if v is None:
+            return None
+        if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
+            return None
+        if isinstance(v, (datetime.datetime, datetime.date)):
+            return v.isoformat()
+        if isinstance(v, datetime.timedelta):
+            return str(v)
+        if hasattr(v, 'item'):  # numpy scalar
+            return v.item()
+        return v
+
+    records = [{k: _safe(v) for k, v in row.items()} for row in raw]
     return {"total_records": len(records), "records": records}
 
 

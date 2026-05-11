@@ -106,6 +106,8 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
+    networks:
+      - app-network
     restart: unless-stopped
 
   # 前端 Nginx 服务
@@ -118,6 +120,8 @@ services:
       - "80:80"
     depends_on:
       - backend
+    networks:
+      - app-network
     restart: unless-stopped
 
 volumes:
@@ -126,3 +130,7 @@ volumes:
   milvus_data:
   postgres_data:
   uploads_data:
+
+networks:
+  app-network:
+    driver: bridge
