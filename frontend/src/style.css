@@ -5,12 +5,16 @@
 }
 
 :root {
-  --primary: #409EFF;
-  --primary-light: #ecf5ff;
-  --success: #67C23A;
-  --warning: #E6A23C;
-  --danger: #F56C6C;
+  --primary: #409eff;
+  --primary-light: #79bbff;
+  --primary-lighter: #a0cfff;
+  --primary-dark: #337ecc;
+
+  --success: #67c23a;
+  --warning: #e6a23c;
+  --danger: #f56c6c;
   --info: #909399;
+
   --text-primary: #303133;
   --text-regular: #606266;
   --text-secondary: #909399;
@@ -23,15 +27,27 @@
   --shadow-hover: 0 8px 24px rgba(0, 0, 0, 0.12);
   --radius: 8px;
   --radius-lg: 12px;
+
+  /* Layout */
+  --max-width: 1440px;
+  --content-width: 1200px;
+  --sidebar-width: 240px;
+
+  /* Z-index */
+  --z-content: 1;
+  --z-nav: 100;
+  --z-mask: 1000;
+  --z-modal: 1001;
+  --z-message: 9999;
 }
 
 body {
   margin: 0;
-  font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB',
-    'Microsoft YaHei', Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   font-size: 14px;
   color: var(--text-regular);
   background: var(--bg-page);
+  line-height: 1.5;
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -42,4 +58,123 @@ h1, h2, h3, h4, h5, h6 {
 #app {
   width: 100%;
   min-height: 100vh;
+}
+
+.page-container {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.content-container {
+  max-width: var(--content-width);
+  margin: 0 auto;
+}
+
+/* Button System */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.645, 0.045, 0.355, 1);
+  border: 1px solid transparent;
+  outline: none;
+}
+
+.btn-primary {
+  background-color: var(--primary);
+  color: #fff;
+}
+.btn-primary:hover { background-color: var(--primary-dark); transform: translateY(-1px); }
+.btn-primary:active { transform: translateY(0); }
+.btn-primary:disabled { background-color: var(--primary-lighter); cursor: not-allowed; opacity: 0.7; }
+
+.btn-default {
+  background-color: #fff;
+  border-color: var(--border-color);
+  color: var(--text-regular);
+}
+.btn-default:hover { border-color: var(--primary); color: var(--primary); }
+
+.btn-text {
+  background: transparent;
+  color: var(--primary);
+  padding: 4px 8px;
+}
+.btn-text:hover { background: var(--primary-light); }
+
+.btn-lg { padding: 12px 24px; font-size: 16px; }
+.btn-sm { padding: 4px 12px; font-size: 12px; }
+
+/* Card System */
+.card {
+  background-color: #fff;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-base);
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.card:hover {
+  box-shadow: var(--shadow-hover);
+}
+
+.card-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.card-body {
+  padding: 20px;
+}
+
+.card-footer {
+  padding: 12px 20px;
+  background-color: var(--bg-light);
+  border-top: 1px solid var(--border-light);
+}
+
+/* Grid System (Native CSS Grid helpers) */
+.grid-12 {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 16px;
+}
+
+.grid-24 {
+  display: grid;
+  grid-template-columns: repeat(24, 1fr);
+  gap: 8px;
+}
+
+/* Responsive breakpoints */
+@media (max-width: 767px) {
+  :root {
+    --page-padding: 16px;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1024px) {
+  :root {
+    --page-padding: 24px;
+    --content-width: 100%;
+  }
+}
+
+@media (min-width: 1025px) {
+  :root {
+    --page-padding: 32px;
+  }
+}
+
+@media (min-width: 1921px) {
+  :root {
+    --max-width: 1800px;
+    --content-width: 1400px;
+  }
 }

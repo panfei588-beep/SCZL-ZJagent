@@ -1,21 +1,23 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import DigitalEmployeeSkills from '../views/DigitalEmployeeSkills.vue'
+import QualityDiagnosisWorkbench from '../views/QualityDiagnosisWorkbench.vue'
 
 const routes = [
   {
     path: '/',
-    name: 'Home',
-    component: () => import('../views/DigitalEmployeeSkills.vue'),
+    name: 'Skills',
+    component: DigitalEmployeeSkills
   },
   {
     path: '/tools/quality-diagnosis',
     name: 'QualityDiagnosis',
-    component: () => import('../views/QualityDiagnosisWorkbench.vue'),
-  },
+    component: QualityDiagnosisWorkbench
+  }
 ]
 
 const router = createRouter({
   history: createWebHistory(),
-  routes,
+  routes
 })
 
 export default router

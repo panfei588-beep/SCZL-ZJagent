@@ -18,6 +18,8 @@ services:
       interval: 30s
       timeout: 20s
       retries: 3
+    networks:
+      - app-network
     restart: unless-stopped
 
   # Milvus 依赖：MinIO
@@ -35,6 +37,8 @@ services:
       interval: 30s
       timeout: 20s
       retries: 3
+    networks:
+      - app-network
     restart: unless-stopped
 
   # Milvus 向量数据库
@@ -58,6 +62,8 @@ services:
       interval: 30s
       timeout: 20s
       retries: 3
+    networks:
+      - app-network
     restart: unless-stopped
 
   # PostgreSQL 数据库
@@ -78,6 +84,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - app-network
     restart: unless-stopped
 
   # 后端 FastAPI 服务
@@ -88,8 +96,9 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
+    env_file:
+      - .env
     environment:
-      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
       - MILVUS_HOST=milvus
       - MILVUS_PORT=19530
       - POSTGRES_HOST=postgres
