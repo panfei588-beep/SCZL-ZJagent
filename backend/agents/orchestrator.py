@@ -4,6 +4,8 @@
 """
 
 from typing import Optional
+import json
+import re
 from langchain.agents import AgentExecutor, create_openai_tools_agent
 from langchain.prompts import ChatPromptTemplate
 from langchain_community.chat_models import ChatTongyi
@@ -147,18 +149,23 @@ class QualityDiagnosisOrchestrator:
     def _parse_result(self, result: dict) -> dict:
         output = result.get("output", "")
         try:
-            import json
-
-            if "```json" in output:
-                json_str = output.split("```json")[1].split("```")[0]
+            # 提取 JSON 块
+            json_str = None
+            match = re.search(r"```json\s*\n([\s\S]*?)\n```", output)
+            if match:
+                json_str = match.group(1)
             elif "{" in output:
                 start = output.index("{")
                 end = output.rindex("}") + 1
                 json_str = output[start:end]
-            else:
-                json_str = output
-            return json.loads(json_str)
-        except (json.JSONDecodeError, ValueError):
+
+            if json_str is None:
+                raise ValueError("未找到 JSON 格式输出")
+
+            data = json.loads(json_str)
+            self._validate_result(data)
+            return data
+        except Exception:
             return {
                 "quality_trend": {
                     "dates": [],
@@ -172,19 +179,28 @@ class QualityDiagnosisOrchestrator:
                 "raw_output": output,
             }
 
+    def _validate_result(self, data: dict) -> None:
+        required = ["quality_trend", "root_causes"]
+        for key in required:
+            if key not in data:
+                data[key] = [] if key == "root_causes" else {}
+
     def _parse_solutions(self, result: dict) -> list[dict]:
         output = result.get("output", "")
         try:
-            import json
-
-            if "```json" in output:
-                json_str = output.split("```json")[1].split("```")[0]
+            json_str = None
+            match = re.search(r"```json\s*\n([\s\S]*?)\n```", output)
+            if match:
+                json_str = match.group(1)
             elif "[" in output:
                 start = output.index("[")
                 end = output.rindex("]") + 1
                 json_str = output[start:end]
-            else:
-                json_str = output
-            return json.loads(json_str)
-        except (json.JSONDecodeError, ValueError):
+
+            if json_str is None:
+                raise ValueError("未找到 JSON 格式输出")
+
+            data = json.loads(json_str)
+            return data if isinstance(data, list) else []
+        except Exception:
             return []
