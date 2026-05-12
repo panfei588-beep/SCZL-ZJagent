@@ -6,6 +6,7 @@
 from typing import Optional
 import json
 import re
+import logging
 from langchain.agents import AgentExecutor, create_openai_tools_agent
 from langchain.prompts import ChatPromptTemplate
 from langchain_community.chat_models import ChatTongyi
@@ -119,8 +120,20 @@ class QualityDiagnosisOrchestrator:
             + "\n\n请进行完整的6维根因分析并给出诊断结果。"
         )
 
-        result = await self.agent.ainvoke({"input": input_text})
-        return self._parse_result(result)
+        try:
+            result = await self.agent.ainvoke({"input": input_text})
+            return self._parse_result(result)
+        except Exception as e:
+            logging.error(f"Agent diagnose failed: {e}", exc_info=True)
+            return {
+                "quality_trend": {
+                    "dates": [], "rates": [],
+                    "initial_rate": 0, "current_rate": 0, "decline": 0,
+                },
+                "root_causes": [],
+                "similar_cases": [],
+                "error": str(e),
+            }
 
     async def generate_solutions(
         self, root_causes: list[dict], equipment: Optional[str] = None
@@ -143,8 +156,12 @@ class QualityDiagnosisOrchestrator:
 
 请以JSON数组格式返回。"""
 
-        result = await self.agent.ainvoke({"input": input_text})
-        return self._parse_solutions(result)
+        try:
+            result = await self.agent.ainvoke({"input": input_text})
+            return self._parse_solutions(result)
+        except Exception as e:
+            logging.error(f"Agent generate_solutions failed: {e}", exc_info=True)
+            return []
 
     def _parse_result(self, result: dict) -> dict:
         output = result.get("output", "")
