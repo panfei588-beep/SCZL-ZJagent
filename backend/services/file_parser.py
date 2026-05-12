@@ -9,7 +9,58 @@ import pandas as pd
 from typing import Any
 
 
-async def parse_file(file_path: str, ext: str) -> dict[str, Any]:
+# 质量检测数据必需列（至少包含一个）
+REQUIRED_RESULT_COLUMNS = {"判定", "结果", "result"}
+# 推荐列（缺失时给警告）
+RECOMMENDED_DATE_COLUMNS = {"日期", "时间", "record_date"}
+
+
+def validate_quality_data(records: list[dict]) -> dict:
+    """验证解析后的数据是否包含质量诊断所需的基本列。"""
+    if not records:
+        return {
+            "valid": False,
+            "error": "文件中未找到质量检测数据，请确认文件格式正确",
+            "warning": None,
+            "columns_found": [],
+        }
+
+    all_columns: set[str] = set()
+    for record in records:
+        all_columns.update(record.keys())
+
+    columns_found = sorted(all_columns)
+    has_result_col = bool(all_columns & REQUIRED_RESULT_COLUMNS)
+
+    if not has_result_col:
+        return {
+            "valid": False,
+            "error": (
+                f"文件中未找到质量检测数据。"
+                f"检测到的列: {', '.join(columns_found)}，"
+                f"需要至少包含以下列之一: {', '.join(sorted(REQUIRED_RESULT_COLUMNS))}"
+            ),
+            "warning": None,
+            "columns_found": columns_found,
+        }
+
+    has_date_col = bool(all_columns & RECOMMENDED_DATE_COLUMNS)
+    warning = None
+    if not has_date_col:
+        warning = (
+            f"未检测到日期/时间列，时间趋势分析可能不可用。"
+            f"检测到的列: {', '.join(columns_found)}"
+        )
+
+    return {
+        "valid": True,
+        "error": None,
+        "warning": warning,
+        "columns_found": columns_found,
+    }
+
+
+def parse_file(file_path: str, ext: str) -> dict[str, Any]:
     ext = ext.lower()
 
     if ext in (".xlsx", ".xls"):
@@ -24,7 +75,7 @@ def _parse_excel(file_path: str) -> dict[str, Any]:
     import math
     import datetime
     df = pd.read_excel(file_path)
-    # 保留原始中文列名，不标准化（前端依赖中文列名显示）
+    # 保留原始中文列名，不做标准化（前端依赖中文列名显示）
     raw = df.to_dict("records")
 
     def _safe(v: Any) -> Any:

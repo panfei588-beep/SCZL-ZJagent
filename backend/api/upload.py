@@ -2,7 +2,7 @@ import os
 import uuid
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from core.config import get_settings
-from services.file_parser import parse_file
+from services.file_parser import parse_file, validate_quality_data
 
 router = APIRouter()
 settings = get_settings()
@@ -33,6 +33,31 @@ async def upload_file(file: UploadFile = File(...)):
         f.write(content)
 
     parsed_result = await parse_file(save_path, ext)
+
+    # 仅对 Excel 文件校验内容格式
+    if ext in (".xlsx", ".xls"):
+        records = parsed_result.get("records", [])
+        validation = validate_quality_data(records)
+
+        if not validation["valid"]:
+            if os.path.exists(save_path):
+                os.remove(save_path)
+            raise HTTPException(status_code=400, detail=validation["error"])
+
+        if validation["warning"]:
+            return {
+                "code": 200,
+                "message": "上传成功",
+                "warning": validation["warning"],
+                "data": {
+                    "file_id": file_id,
+                    "filename": file.filename,
+                    "file_path": save_path,
+                    "total_records": parsed_result.get("total_records", 0),
+                    "records": parsed_result.get("records", []),
+                    "columns_found": validation["columns_found"],
+                },
+            }
 
     return {
         "code": 200,

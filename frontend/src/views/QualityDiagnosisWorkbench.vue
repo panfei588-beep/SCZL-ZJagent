@@ -72,6 +72,17 @@
               </el-table>
             </div>
 
+            <!-- Warning Banner -->
+            <div v-if="uploadWarning" class="warning-banner-box animate-fade-in">
+              <el-alert
+                :title="uploadWarning"
+                type="warning"
+                :closable="true"
+                show-icon
+                @close="uploadWarning = ''"
+              />
+            </div>
+
             <div class="filter-panel">
               <div class="filter-item">
                 <span class="filter-label">生产设备</span>
@@ -677,6 +688,7 @@ const uploadedData = ref([])
 const totalRecords = ref(0)
 const filePath = ref('')
 const fileList = ref([])
+const uploadWarning = ref('')
 const diagnosisResult = ref(null)
 const solutions = ref([])
 
@@ -780,7 +792,12 @@ const handleFileChange = async (uploadFile) => {
       uploadedData.value = data.data.records
       totalRecords.value = data.data.total_records
       filePath.value = data.data.file_path
-      ElMessage.success('报表解析成功，特征已提取')
+      uploadWarning.value = data.warning || ''
+      if (uploadWarning.value) {
+        ElMessage.warning(uploadWarning.value)
+      } else {
+        ElMessage.success('报表解析成功，特征已提取')
+      }
     } else {
       ElMessage.error(data.detail || '上传失败')
     }
@@ -794,6 +811,7 @@ const handleFileRemove = () => {
   totalRecords.value = 0
   filePath.value = ''
   fileList.value = []
+  uploadWarning.value = ''
 }
 
 const startAIScan = () => {
@@ -1133,6 +1151,10 @@ const reset = () => {
 }
 .status-tag.success { background: #f0f9eb; color: #67c23a; }
 .status-tag.danger { background: #fef0f0; color: #f56c6c; }
+
+.warning-banner-box {
+  margin-bottom: 24px;
+}
 
 .filter-panel {
   display: flex;
