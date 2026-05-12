@@ -19,6 +19,7 @@ jobs:
             cd ~/digitalemployee
             git pull origin ${{ github.ref_name }}
             cd deploy
-            docker compose build --no-cache backend frontend
-            docker compose up -d --force-recreate
+            docker compose down
+            docker compose build backend frontend
+            docker compose up -d
             docker image prune -f
