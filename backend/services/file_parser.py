@@ -24,6 +24,7 @@ def _parse_excel(file_path: str) -> dict[str, Any]:
     import math
     import datetime
     df = pd.read_excel(file_path)
+    # 保留原始中文列名，不标准化（前端依赖中文列名显示）
     raw = df.to_dict("records")
 
     def _safe(v: Any) -> Any:

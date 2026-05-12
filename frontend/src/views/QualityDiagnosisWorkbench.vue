@@ -37,6 +37,9 @@
               action="#"
               :auto-upload="false"
               :on-change="handleFileChange"
+              :on-remove="handleFileRemove"
+              :file-list="fileList"
+              :limit="1"
               multiple
             >
               <div class="upload-inner">
@@ -673,6 +676,7 @@ const filter = ref({
 const uploadedData = ref([])
 const totalRecords = ref(0)
 const filePath = ref('')
+const fileList = ref([])
 const diagnosisResult = ref(null)
 const solutions = ref([])
 
@@ -765,7 +769,7 @@ const handleFileChange = async (uploadFile) => {
   const file = uploadFile.raw
   const formData = new FormData()
   formData.append('file', file)
-  
+
   try {
     const res = await fetch('/api/upload/file', {
       method: 'POST',
@@ -777,10 +781,19 @@ const handleFileChange = async (uploadFile) => {
       totalRecords.value = data.data.total_records
       filePath.value = data.data.file_path
       ElMessage.success('报表解析成功，特征已提取')
+    } else {
+      ElMessage.error(data.detail || '上传失败')
     }
   } catch (e) {
     ElMessage.error('上传失败')
   }
+}
+
+const handleFileRemove = () => {
+  uploadedData.value = []
+  totalRecords.value = 0
+  filePath.value = ''
+  fileList.value = []
 }
 
 const startAIScan = () => {
