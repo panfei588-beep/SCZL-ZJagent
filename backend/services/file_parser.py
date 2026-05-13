@@ -60,7 +60,7 @@ def validate_quality_data(records: list[dict]) -> dict:
     }
 
 
-def parse_file(file_path: str, ext: str) -> dict[str, Any]:
+async def parse_file(file_path: str, ext: str) -> dict[str, Any]:
     ext = ext.lower()
 
     if ext in (".xlsx", ".xls"):
