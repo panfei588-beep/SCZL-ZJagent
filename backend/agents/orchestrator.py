@@ -29,7 +29,7 @@ class QualityDiagnosisOrchestrator:
 
     async def diagnose(
         self,
-        file_path: str,
+        file_paths: list[str],
         equipment: str,
         days: int,
         operator: Optional[str] = None,
@@ -37,9 +37,20 @@ class QualityDiagnosisOrchestrator:
         environment: Optional[dict] = None,
     ) -> dict:
         try:
-            # Step 1: 分析质量数据
-            data_summary = analyze_quality_data.invoke(file_path)
-            trend_summary = analyze_quality_trend.invoke(file_path)
+            # Step 1: 分析所有文件的质量数据
+            data_summaries = []
+            trend_summaries = []
+            total_records = 0
+
+            for fp in file_paths:
+                data_summary = analyze_quality_data.invoke(fp)
+                trend_summary = analyze_quality_trend.invoke(fp)
+                data_summaries.append(data_summary)
+                trend_summaries.append(trend_summary)
+                try:
+                    total_records += json.loads(data_summary).get("total_records", 0)
+                except json.JSONDecodeError:
+                    pass
 
             # Step 2: 检索相似案例
             query = f"{equipment} 质量异常 合格率下降"
@@ -47,12 +58,17 @@ class QualityDiagnosisOrchestrator:
 
             # Step 3: 构建上下文
             context_parts = [
+                f"文件数：{len(file_paths)}",
+                f"总记录数：{total_records}",
                 f"设备：{equipment}",
                 f"时间范围：最近{days}天",
-                f"数据统计：{data_summary}",
-                f"质量趋势：{trend_summary}",
-                f"相似案例：{similar_cases_raw}",
             ]
+            for i, (ds, ts) in enumerate(zip(data_summaries, trend_summaries)):
+                context_parts.append(f"--- 文件 {i+1}: {file_paths[i]} ---")
+                context_parts.append(f"数据统计：{ds}")
+                context_parts.append(f"质量趋势：{ts}")
+            context_parts.append(f"相似案例：{similar_cases_raw}")
+
             if operator:
                 context_parts.append(f"操作员：{operator}")
             if material:
