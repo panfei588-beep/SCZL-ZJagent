@@ -39,7 +39,6 @@
               :on-change="handleFileChange"
               :on-remove="handleFileRemove"
               :file-list="fileList"
-              :limit="1"
               multiple
             >
               <div class="upload-inner">
@@ -49,7 +48,7 @@
                 <div class="el-upload__text">
                   将质量报表拖拽到此处，或 <em>点击上传</em>
                 </div>
-                <div class="upload-hint">支持 Excel, PDF, CSV, Word 格式，单个文件不超过 50MB</div>
+                <div class="upload-hint">支持 Excel, PDF, CSV, Word 格式，支持同时上传多个文件，单个文件不超过 50MB</div>
               </div>
             </el-upload>
 
@@ -686,7 +685,7 @@ const filter = ref({
 
 const uploadedData = ref([])
 const totalRecords = ref(0)
-const filePath = ref('')
+const filePaths = ref([])
 const fileList = ref([])
 const uploadWarning = ref('')
 const diagnosisResult = ref(null)
@@ -779,6 +778,8 @@ const initVerificationCharts = () => {
 
 const handleFileChange = async (uploadFile) => {
   const file = uploadFile.raw
+  if (!file) return
+
   const formData = new FormData()
   formData.append('file', file)
 
@@ -789,29 +790,28 @@ const handleFileChange = async (uploadFile) => {
     })
     const data = await res.json()
     if (data.code === 200) {
-      uploadedData.value = data.data.records
-      totalRecords.value = data.data.total_records
-      filePath.value = data.data.file_path
-      uploadWarning.value = data.warning || ''
-      if (uploadWarning.value) {
-        ElMessage.warning(uploadWarning.value)
-      } else {
-        ElMessage.success('报表解析成功，特征已提取')
+      filePaths.value.push(data.data.file_path)
+      uploadedData.value = uploadedData.value.concat(data.data.records)
+      totalRecords.value += data.data.total_records
+      if (data.warning) {
+        uploadWarning.value = data.warning
+        ElMessage.warning(data.warning)
       }
+      ElMessage.success(`${file.name} 解析成功`)
     } else if (data.detail) {
       ElMessage.error(data.detail)
     } else {
-      ElMessage.error('上传失败')
+      ElMessage.error(`${file.name} 上传失败`)
     }
   } catch (e) {
-    ElMessage.error('上传失败，请检查网络连接或后端服务')
+    ElMessage.error(`${file.name} 上传失败，请检查网络连接或后端服务`)
   }
 }
 
 const handleFileRemove = () => {
   uploadedData.value = []
   totalRecords.value = 0
-  filePath.value = ''
+  filePaths.value = []
   fileList.value = []
   uploadWarning.value = ''
 }
@@ -857,7 +857,7 @@ const fetchDiagnosisResult = async () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        file_path: filePath.value,
+        file_paths: filePaths.value,
         equipment: filter.value.device || '3号精密磨床',
         days: filter.value.timeRange === '24h' ? 1 : 7,
         operator: filter.value.operator || null,
