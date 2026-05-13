@@ -798,11 +798,13 @@ const handleFileChange = async (uploadFile) => {
       } else {
         ElMessage.success('报表解析成功，特征已提取')
       }
+    } else if (data.detail) {
+      ElMessage.error(data.detail)
     } else {
-      ElMessage.error(data.detail || '上传失败')
+      ElMessage.error('上传失败')
     }
   } catch (e) {
-    ElMessage.error('上传失败')
+    ElMessage.error('上传失败，请检查网络连接或后端服务')
   }
 }
 
