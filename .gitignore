@@ -40,5 +40,8 @@ mineru_output/
 # Requirements docs (internal)
 需求/
 
+# Test data
+测试数据/
+
 # Mock
 mock_server.js
