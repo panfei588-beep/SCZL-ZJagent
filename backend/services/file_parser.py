@@ -1,10 +1,11 @@
 """
 文件解析服务 - 使用 MinerU 进行文档解析和 OCR 识别
-支持: PDF, 图片(JPG/PNG), Word(DOCX), Excel(XLSX)
+支持: PDF, 图片(JPG/PNG), Word(DOCX), Excel(XLSX/XLS)
 """
 
 import os
 import json
+import logging
 import pandas as pd
 from typing import Any
 
@@ -16,7 +17,10 @@ RECOMMENDED_DATE_COLUMNS = {"日期", "时间", "record_date"}
 
 
 def validate_quality_data(records: list[dict]) -> dict:
-    """验证解析后的数据是否包含质量诊断所需的基本列。"""
+    """验证解析后的数据是否包含质量诊断所需的基本列。
+
+    不要求必须有结果列，没有时给 warning 但仍接受。
+    """
     if not records:
         return {
             "valid": False,
@@ -32,31 +36,31 @@ def validate_quality_data(records: list[dict]) -> dict:
     columns_found = sorted(all_columns)
     has_result_col = bool(all_columns & REQUIRED_RESULT_COLUMNS)
 
+    warning = None
     if not has_result_col:
-        return {
-            "valid": False,
-            "error": (
-                f"文件中未找到质量检测数据。"
-                f"检测到的列: {', '.join(columns_found)}，"
-                f"需要至少包含以下列之一: {', '.join(sorted(REQUIRED_RESULT_COLUMNS))}"
-            ),
-            "warning": None,
-            "columns_found": columns_found,
-        }
+        warning = (
+            f"未检测到判定/结果列，无法计算合格率。"
+            f"检测到的列: {', '.join(columns_found)}。"
+            f"将以原始测量数据模式进行分析。"
+        )
 
     has_date_col = bool(all_columns & RECOMMENDED_DATE_COLUMNS)
-    warning = None
-    if not has_date_col:
+    if has_date_col and not warning:
+        pass
+    elif not has_date_col and not warning:
         warning = (
             f"未检测到日期/时间列，时间趋势分析可能不可用。"
             f"检测到的列: {', '.join(columns_found)}"
         )
+    elif not has_date_col and warning:
+        warning += f"\n同时缺少日期列。"
 
     return {
         "valid": True,
         "error": None,
         "warning": warning,
         "columns_found": columns_found,
+        "has_result_column": has_result_col,
     }
 
 
@@ -74,7 +78,17 @@ async def parse_file(file_path: str, ext: str) -> dict[str, Any]:
 def _parse_excel(file_path: str) -> dict[str, Any]:
     import math
     import datetime
-    df = pd.read_excel(file_path)
+
+    # 尝试用 openpyxl 读取 xlsx，失败则用 xlrd 读取 xls
+    try:
+        df = pd.read_excel(file_path, engine="openpyxl")
+    except Exception:
+        try:
+            df = pd.read_excel(file_path, engine="xlrd")
+        except Exception as e:
+            logging.warning(f"Excel 读取失败: {e}")
+            return {"total_records": 0, "records": []}
+
     # 保留原始中文列名，不做标准化（前端依赖中文列名显示）
     raw = df.to_dict("records")
 
@@ -106,7 +120,17 @@ async def _parse_with_mineru(file_path: str) -> dict[str, Any]:
         content_list = result.get("content_list", [])
         markdown_text = result.get("markdown", "")
 
+        logging.info(f"MinerU 解析结果: content_list items={len(content_list)}, markdown len={len(markdown_text)}")
+
         records = _extract_quality_records_from_content(content_list, markdown_text)
+
+        if not records:
+            # fallback: 返回纯文本作为一条记录
+            if markdown_text:
+                records = [{"raw_text": markdown_text[:2000]}]
+            elif content_list:
+                raw_content = json.dumps(content_list[:5], ensure_ascii=False, default=str)
+                records = [{"raw_content": raw_content[:2000]}]
 
         return {"total_records": len(records), "records": records}
 
@@ -143,6 +167,8 @@ async def _parse_with_mineru_cli(file_path: str) -> dict[str, Any]:
             markdown_text = f.read()
 
         records = _extract_quality_records_from_markdown(markdown_text)
+        if not records:
+            records = [{"raw_text": markdown_text[:2000]}]
         return {"total_records": len(records), "records": records}
 
     json_files = [f for f in os.listdir(output_dir) if f.endswith(".json")]
@@ -162,6 +188,7 @@ def _extract_quality_records_from_content(
     """从 MinerU 解析结果中提取质量检测记录"""
     records = []
 
+    # 先尝试从表格提取
     tables = [item for item in content_list if item.get("type") == "table"]
     if tables:
         for table in tables:
@@ -176,6 +203,7 @@ def _extract_quality_records_from_content(
                     if record:
                         records.append(record)
 
+    # 表格未提取到则从 markdown 提取
     if not records:
         records = _extract_quality_records_from_markdown(markdown_text)
 
@@ -187,28 +215,33 @@ def _extract_quality_records_from_markdown(markdown_text: str) -> list[dict]:
     records = []
     lines = markdown_text.strip().split("\n")
 
-    table_start = -1
+    # 查找 markdown 表格
     for i, line in enumerate(lines):
         if "|" in line and line.strip().startswith("|"):
-            table_start = i
-            break
-
-    if table_start < 0:
-        return records
-
-    headers = [
-        h.strip() for h in lines[table_start].split("|") if h.strip() and h.strip() != "---"
-    ]
-
-    for line in lines[table_start + 2 :]:
-        if not line.strip().startswith("|"):
-            break
-        cells = [c.strip() for c in line.split("|") if c.strip()]
-        if len(cells) >= len(headers):
-            record = {}
-            for j, header in enumerate(headers):
-                record[_normalize_header(header)] = cells[j]
-            records.append(record)
+            headers = [
+                h.strip() for h in line.split("|")
+                if h.strip() and not h.strip().startswith("---")
+            ]
+            if not headers:
+                continue
+            # 跳过分隔行
+            j = i + 1
+            if j < len(lines) and "---" in lines[j]:
+                j += 1
+            while j < len(lines):
+                row_line = lines[j]
+                if not row_line.strip().startswith("|"):
+                    break
+                cells = [c.strip() for c in row_line.split("|") if c.strip()]
+                if len(cells) >= len(headers):
+                    record = {}
+                    for k, header in enumerate(headers):
+                        record[_normalize_header(header)] = cells[k]
+                    if record:
+                        records.append(record)
+                j += 1
+            if records:
+                break
 
     return records
 
