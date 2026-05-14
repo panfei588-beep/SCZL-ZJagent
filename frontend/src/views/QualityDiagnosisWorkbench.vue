@@ -884,15 +884,30 @@ const handleFileChange = async (uploadFile) => {
         activeConfigCollapse.value = ['config']
       }
     } else if (data.detail) {
-      fileList.value = fileList.value.filter(f => f.uid !== uploadFile.uid)
-      ElMessage.error(data.detail)
+      // 上传失败：重置所有状态，保证数据一致性
+      uploadedData.value = []
+      totalRecords.value = 0
+      filePaths.value = []
+      uploadWarning.value = ''
+      fileList.value = []
+      ElMessage.error(`${file.name} 上传失败：${data.detail}，已清空列表，请重新上传`)
     } else {
-      fileList.value = fileList.value.filter(f => f.uid !== uploadFile.uid)
-      ElMessage.error(`${file.name} 上传失败`)
+      // 上传失败：重置所有状态
+      uploadedData.value = []
+      totalRecords.value = 0
+      filePaths.value = []
+      uploadWarning.value = ''
+      fileList.value = []
+      ElMessage.error(`${file.name} 上传失败，已清空列表，请重新上传`)
     }
   } catch (e) {
-    fileList.value = fileList.value.filter(f => f.uid !== uploadFile.uid)
-    ElMessage.error(`${file.name} 上传失败，请检查网络连接或后端服务`)
+    // 网络异常：重置所有状态
+    uploadedData.value = []
+    totalRecords.value = 0
+    filePaths.value = []
+    uploadWarning.value = ''
+    fileList.value = []
+    ElMessage.error(`${file.name} 上传失败，请检查网络连接或后端服务，已清空列表`)
   }
 }
 
