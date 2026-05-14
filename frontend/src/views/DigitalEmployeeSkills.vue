@@ -59,7 +59,7 @@ const currentTab = ref('部门技能')
 const tabs = ['部门技能', '生产部', '质检部', '工艺部', '设备部', '技术部', '管理部', '后勤部', '通用工具']
 
 const allSkills = [
-  { id: 1, title: '质量异常诊断专家', desc: '基于AI的质量波动根因分析，自动生成改进方案，帮助快速定位质量问题。', iconComponent: markRaw(Document), bgColor: '#E6F4FF', route: '/tools/quality-diagnosis' },
+  { id: 1, title: '质量改善管理专家', desc: '基于质检实测数据分析，自动生成可视化数据报告和改进方案，帮助快速定位质量问题。', iconComponent: markRaw(Document), bgColor: '#E6F4FF', route: '/tools/quality-diagnosis' },
 ]
 
 const filteredSkills = computed(() => {
