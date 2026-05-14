@@ -884,21 +884,24 @@ const handleFileChange = async (uploadFile) => {
         activeConfigCollapse.value = ['config']
       }
     } else if (data.detail) {
+      fileList.value = fileList.value.filter(f => f.uid !== uploadFile.uid)
       ElMessage.error(data.detail)
     } else {
+      fileList.value = fileList.value.filter(f => f.uid !== uploadFile.uid)
       ElMessage.error(`${file.name} 上传失败`)
     }
   } catch (e) {
+    fileList.value = fileList.value.filter(f => f.uid !== uploadFile.uid)
     ElMessage.error(`${file.name} 上传失败，请检查网络连接或后端服务`)
   }
 }
 
-const handleFileRemove = () => {
+const handleFileRemove = (file) => {
   uploadedData.value = []
   totalRecords.value = 0
   filePaths.value = []
-  fileList.value = []
   uploadWarning.value = ''
+  ElMessage.info(`已删除 ${file.name}，请重新上传所有文件后再次诊断`)
 }
 
 const startAIScan = () => {
