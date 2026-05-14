@@ -896,12 +896,12 @@ const handleFileChange = async (uploadFile) => {
   }
 }
 
-const handleFileRemove = () => {
+const handleFileRemove = (file) => {
   uploadedData.value = []
   totalRecords.value = 0
   filePaths.value = []
-  fileList.value = []
   uploadWarning.value = ''
+  ElMessage.info(`已删除 ${file.name}，请重新上传所有文件后再次诊断`)
 }
 
 const startAIScan = () => {
