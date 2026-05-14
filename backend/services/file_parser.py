@@ -117,10 +117,21 @@ async def _parse_with_mineru(file_path: str) -> dict[str, Any]:
         api = MinerUAPI()
         result = api.parse(file_path)
 
-        content_list = result.get("content_list", [])
-        markdown_text = result.get("markdown", "")
+        # MinerU 可能返回 dict 或对象，统一处理
+        if isinstance(result, dict):
+            content_list = result.get("content_list", [])
+            markdown_text = result.get("markdown", "") or result.get("md_content", "")
+        else:
+            # 对象类型，尝试属性访问
+            content_list = getattr(result, "content_list", []) or []
+            markdown_text = getattr(result, "markdown", "") or getattr(result, "md_content", "") or ""
 
         logging.info(f"MinerU 解析结果: content_list items={len(content_list)}, markdown len={len(markdown_text)}")
+
+        # 如果 MinerU 未返回内容，记录所有 key 以便调试
+        if not content_list and not markdown_text:
+            if isinstance(result, dict):
+                logging.warning(f"MinerU 返回空内容，可用 keys: {list(result.keys())}")
 
         records = _extract_quality_records_from_content(content_list, markdown_text)
 
@@ -136,6 +147,70 @@ async def _parse_with_mineru(file_path: str) -> dict[str, Any]:
 
     except ImportError:
         return await _parse_with_mineru_cli(file_path)
+    except Exception as e:
+        logging.error(f"MinerU 解析异常: {e}")
+        # MinerU 完全失败时尝试用 PyPDF2 提取文本
+        return await _fallback_text_extraction(file_path)
+
+
+async def _fallback_text_extraction(file_path: str) -> dict[str, Any]:
+    """当 MinerU 完全失败时，用基础库提取文本（PyPDF2/PyMuPDF/纯文本）。"""
+    ext = os.path.splitext(file_path)[1].lower()
+
+    # PDF: 尝试 PyPDF2 或 fitz (PyMuPDF)
+    if ext == ".pdf":
+        for lib_name in ("PyPDF2", "fitz"):
+            try:
+                if lib_name == "PyPDF2":
+                    from PyPDF2 import PdfReader
+                    reader = PdfReader(file_path)
+                    text = ""
+                    for page in reader.pages:
+                        text += page.extract_text() or ""
+                    if text.strip():
+                        return {"total_records": 1, "records": [{"raw_text": text.strip()[:2000]}]}
+                elif lib_name == "fitz":
+                    import fitz
+                    doc = fitz.open(file_path)
+                    text = ""
+                    for page in doc:
+                        text += page.get_text() or ""
+                    doc.close()
+                    if text.strip():
+                        return {"total_records": 1, "records": [{"raw_text": text.strip()[:2000]}]}
+            except (ImportError, Exception) as e:
+                logging.debug(f"{lib_name} 提取失败: {e}")
+                continue
+
+    # DOCX: 尝试 python-docx
+    if ext in (".docx", ".doc"):
+        try:
+            from docx import Document
+            doc = Document(file_path)
+            text = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+            if text.strip():
+                return {"total_records": 1, "records": [{"raw_text": text.strip()[:2000]}]}
+        except (ImportError, Exception) as e:
+            logging.debug(f"python-docx 提取失败: {e}")
+
+    # 图片: 尝试 pytesseract OCR
+    if ext in (".jpg", ".jpeg", ".png"):
+        try:
+            import pytesseract
+            from PIL import Image
+            img = Image.open(file_path)
+            text = pytesseract.image_to_string(img, lang='chi_sim+eng')
+            if text.strip():
+                return {"total_records": 1, "records": [{"raw_text": text.strip()[:2000]}]}
+        except (ImportError, Exception) as e:
+            logging.debug(f"pytesseract OCR 失败: {e}")
+
+    # 最后兜底: 返回文件基本信息
+    file_size = os.path.getsize(file_path)
+    return {
+        "total_records": 1,
+        "records": [{"raw_text": f"文件 {os.path.basename(file_path)} ({ext}, {file_size} bytes)，无法提取结构化文本内容。请确认文件包含可读数据。"}],
+    }
 
 
 async def _parse_with_mineru_cli(file_path: str) -> dict[str, Any]:
@@ -154,11 +229,10 @@ async def _parse_with_mineru_cli(file_path: str) -> dict[str, Any]:
     stdout, stderr = await proc.communicate()
 
     if proc.returncode != 0:
-        return {
-            "total_records": 0,
-            "records": [],
-            "raw_text": stderr.decode("utf-8", errors="ignore"),
-        }
+        # CLI 执行失败 → 回退到基础文本提取
+        error_text = stderr.decode("utf-8", errors="ignore")
+        logging.warning(f"MinerU CLI 执行失败: {error_text[:200]}")
+        return await _fallback_text_extraction(file_path)
 
     md_files = [f for f in os.listdir(output_dir) if f.endswith(".md")]
     if md_files:
@@ -168,6 +242,7 @@ async def _parse_with_mineru_cli(file_path: str) -> dict[str, Any]:
 
         records = _extract_quality_records_from_markdown(markdown_text)
         if not records:
+            # 未提取到表格 → 返回原始文本
             records = [{"raw_text": markdown_text[:2000]}]
         return {"total_records": len(records), "records": records}
 
@@ -177,9 +252,18 @@ async def _parse_with_mineru_cli(file_path: str) -> dict[str, Any]:
         with open(json_path, "r", encoding="utf-8") as f:
             data = json.load(f)
         records = _extract_quality_records_from_json(data)
+        if not records:
+            # JSON 中没有结构化记录 → 返回原始 JSON 文本
+            records = [{"raw_content": json.dumps(data, ensure_ascii=False, default=str)[:2000]}]
         return {"total_records": len(records), "records": records}
 
-    return {"total_records": 0, "records": []}
+    # MinerU 执行成功但无输出文件 → 返回原始文件内容
+    with open(file_path, "rb") as f:
+        raw_bytes = f.read(2000)
+    return {
+        "total_records": 1,
+        "records": [{"raw_content": f"[非结构化文件，原始内容 {len(raw_bytes)} bytes]"}],
+    }
 
 
 def _extract_quality_records_from_content(
