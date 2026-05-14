@@ -3,9 +3,11 @@ import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import cors from 'cors';
+import multer from 'multer';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const upload = multer({ storage: multer.memoryStorage() });
 
 async function startServer() {
   const app = express();
@@ -13,10 +15,18 @@ async function startServer() {
 
   app.use(cors());
   app.use(express.json());
+  app.use(express.urlencoded({ extended: true }));
+
+  // Logging middleware
+  app.use((req, res, next) => {
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+    next();
+  });
 
   // --- Mock API Endpoints ---
 
-  app.post('/api/upload/file', (req, res) => {
+  app.post('/api/upload/file', upload.single('file'), (req, res) => {
+    console.log('Received upload request');
     // Simple mock upload response
     res.json({
       code: 200,
@@ -48,7 +58,7 @@ async function startServer() {
             cause: '3号精密磨床主轴轴承磨损',
             category: '设备',
             confidence: 0.92,
-            impact: '导致加工件径向跳动超差，合格率下降8%',
+            influence: '导致加工件径向跳动超差，合格率下降8%',
             evidence: [
               '三次元检测数据波动呈现明显的周期性特征',
               '近期设备维护记录显示主轴振动值超标15%',
@@ -61,7 +71,7 @@ async function startServer() {
             cause: '切削液浓度不达标',
             category: '环境',
             confidence: 0.78,
-            impact: '散热不良导致工件热变形',
+            influence: '散热不良导致工件热变形',
             evidence: [
               '测量数据在下午高温时段偏差增大',
               '车间环境温度近期波动较大'
@@ -136,7 +146,7 @@ async function startServer() {
     // Production serving
     const distPath = path.join(__dirname, 'dist');
     app.use(express.static(distPath));
-    app.get('/{*path}', (req, res) => {
+    app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }

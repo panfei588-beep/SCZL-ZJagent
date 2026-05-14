@@ -14,7 +14,7 @@
         @click="router.push('/tools/quality-diagnosis')"
       >
         <el-icon><Document /></el-icon>
-        <span>质量异常诊断专家</span>
+        <span>质量改善管理专家</span>
       </div>
       <div 
         class="nav-item" 

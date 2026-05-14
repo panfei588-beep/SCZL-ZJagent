@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Any
 from agents.orchestrator import run_analysis
 
 router = APIRouter()
@@ -17,7 +17,7 @@ class QualityAnalyzeRequest(BaseModel):
     # 新增参数
     focus_metrics: Optional[list[str]] = None
     analysis_goal: Optional[str] = None
-    depth: Optional[str] = None
+    depth: Optional[Any] = None
     time_range: Optional[str] = None
 
 
@@ -37,7 +37,7 @@ async def analyze(request: QualityAnalyzeRequest):
             "environment": request.environment,
             "focus_metrics": request.focus_metrics,
             "analysis_goal": request.analysis_goal,
-            "depth": request.depth,
+            "depth": str(request.depth) if request.depth is not None else None,
             "time_range": request.time_range,
         }
 
