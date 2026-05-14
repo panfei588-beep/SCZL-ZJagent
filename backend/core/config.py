@@ -22,6 +22,12 @@ class Settings(BaseSettings):
     upload_dir: str = "./uploads"
     max_upload_size: int = 52428800
 
+    # LangGraph Workflow
+    confidence_threshold: float = 0.6
+    data_retry_limit: int = 3
+    rag_top_k: int = 5
+    charts_dir: str = "./charts"
+
     class Config:
         env_file = ".env"
 

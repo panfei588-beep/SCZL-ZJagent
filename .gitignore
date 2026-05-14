@@ -45,3 +45,6 @@ mineru_output/
 
 # Mock
 mock_server.js
+
+# Data sources (internal)
+数据源/

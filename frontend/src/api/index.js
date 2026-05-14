@@ -17,6 +17,10 @@ export function startDiagnosis(params) {
   return api.post('/diagnosis/analyze', params)
 }
 
+export function analyzeQuality(params) {
+  return api.post('/diagnosis/analyze', params)
+}
+
 export function generateSolution(params) {
   return api.post('/solution/generate', params)
 }
