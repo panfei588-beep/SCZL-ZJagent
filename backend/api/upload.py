@@ -34,9 +34,18 @@ async def upload_file(file: UploadFile = File(...)):
 
     parsed_result = await parse_file(save_path, ext)
 
-    # 仅对 Excel 文件校验内容格式
+    # 检查解析结果是否为空
+    records = parsed_result.get("records", [])
+    if not records:
+        if os.path.exists(save_path):
+            os.remove(save_path)
+        raise HTTPException(
+            status_code=400,
+            detail="文件中未提取到有效数据，请确认文件包含质量报表或表格",
+        )
+
+    # 仅对 Excel 文件校验内容格式（需要包含判定/结果列）
     if ext in (".xlsx", ".xls"):
-        records = parsed_result.get("records", [])
         validation = validate_quality_data(records)
 
         if not validation["valid"]:
@@ -54,7 +63,7 @@ async def upload_file(file: UploadFile = File(...)):
                     "filename": file.filename,
                     "file_path": save_path,
                     "total_records": parsed_result.get("total_records", 0),
-                    "records": parsed_result.get("records", []),
+                    "records": records,
                     "columns_found": validation["columns_found"],
                 },
             }
@@ -67,6 +76,6 @@ async def upload_file(file: UploadFile = File(...)):
             "filename": file.filename,
             "file_path": save_path,
             "total_records": parsed_result.get("total_records", 0),
-            "records": parsed_result.get("records", []),
+            "records": records,
         },
     }
