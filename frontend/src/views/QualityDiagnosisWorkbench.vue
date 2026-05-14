@@ -6,142 +6,105 @@
           <el-icon><ArrowLeft /></el-icon> 返回
         </span>
         <span class="divider">/</span>
-        <span class="current-page">质量异常诊断工作台</span>
+        <span class="current-page">质量改善管理专家</span>
       </div>
     </div>
 
     <div class="workbench-content">
       <!-- Steps Navigation -->
       <div class="steps-wrapper card">
-        <el-steps :active="currentStep" align-center class="custom-steps">
-          <el-step title="数据采样" :icon="Upload" />
-          <el-step title="AI 根因诊断" :icon="Cpu" />
-          <el-step title="多维结果画像" :icon="PieChart" />
-          <el-step title="智能化改进方案" :icon="CircleCheck" />
-          <el-step title="方案验证与归因" :icon="Odometer" />
-          <el-step title="双样本 T-test" :icon="PieChart" />
-          <el-step title="固本方案 SOP" :icon="Management" />
+        <el-steps :active="currentStep === 99 ? 1 : currentStep" align-center class="custom-steps" finish-status="success">
+          <el-step title="数据采样" :icon="Upload" @click="goToStep(0)" class="clickable-step" />
+          <el-step title="AI数据解析" :icon="PieChart" @click="goToStep(1)" class="clickable-step" />
+          <el-step title="AI诊断分析" :icon="Cpu" @click="goToStep(2)" class="clickable-step" />
+          <el-step title="智能化改进方案" :icon="CircleCheck" @click="goToStep(3)" class="clickable-step" />
         </el-steps>
       </div>
 
-      <!-- Step 0: Upload -->
+
+
+      <!-- Step 0: Data Sampling -->
       <div v-if="currentStep === 0" class="step-container animate-fade-in">
         <div class="card upload-card">
           <div class="card-header">
-            <h3 class="section-title">Step 1: 上传质量检测数据</h3>
+            <h3 class="section-title">Step 1: 数据采样上传</h3>
           </div>
           <div class="card-body">
+            <!-- ZONE B: Data Upload -->
             <el-upload
-              class="upload-area"
+              class="upload-area simplified-upload"
               drag
               action="#"
               :auto-upload="false"
               :on-change="handleFileChange"
               :on-remove="handleFileRemove"
-              :file-list="fileList"
               multiple
+              accept=".xlsx,.xls,.pdf,.doc,.docx,image/*"
             >
               <div class="upload-inner">
-                <div class="pulse-icon">
-                  <el-icon class="upload-icon"><UploadFilled /></el-icon>
-                </div>
+                <el-icon class="upload-icon-small"><UploadFilled /></el-icon>
                 <div class="el-upload__text">
-                  将质量报表拖拽到此处，或 <em>点击上传</em>
+                  [ ↑ 拖拽上传 / 点击上传 / 检测机器人自动获取数据 ]
                 </div>
-                <div class="upload-hint">支持 Excel, PDF, CSV, Word 格式，支持同时上传多个文件，单个文件不超过 50MB</div>
+                <div class="upload-hint">支持多个数据同时上传，单个文件不超过 50MB</div>
               </div>
             </el-upload>
 
             <!-- Data Preview if uploaded -->
-            <div v-if="uploadedData.length > 0" class="data-preview-box animate-fade-in">
+            <div v-if="uploadedData.length > 0" class="data-preview-box mini-preview animate-fade-in mt-16">
               <div class="preview-header">
-                <span class="preview-title">数据预览 (前5条)</span>
-                <el-tag type="success" size="small">已识别 {{ totalRecords }} 条记录</el-tag>
+                <span class="preview-title">已同步检测记录预览</span>
+                <el-tag type="success" size="small">共识别 {{ totalRecords }} 条数据</el-tag>
               </div>
-              <el-table :data="uploadedData.slice(0, 5)" border stripe size="small" class="mini-table">
-                <el-table-column prop="日期" label="日期" width="100" />
-                <el-table-column prop="产品编号" label="产品" width="100" />
-                <el-table-column prop="检测项" label="检测项" />
-                <el-table-column prop="实测值" label="实测值" width="80" />
-                <el-table-column prop="判定" label="判定" width="80">
+              <!-- Structured data preview (has 日期/判定 columns) -->
+              <el-table
+                v-if="uploadedData[0] && (uploadedData[0].hasOwnProperty('日期') || uploadedData[0].hasOwnProperty('判定'))"
+                :data="uploadedData.slice(0, 5)" border stripe size="small" class="micro-table"
+              >
+                <el-table-column prop="日期" label="日期" width="140" />
+                <el-table-column prop="产品编号" label="产品" />
+                <el-table-column prop="实测值" label="检测值" width="90" />
+                <el-table-column prop="判定" label="状态" width="80">
                   <template #default="scope">
                     <span :class="['status-tag', scope.row.判定 === '合格' ? 'success' : 'danger']">{{ scope.row.判定 }}</span>
                   </template>
                 </el-table-column>
               </el-table>
+              <!-- Raw text preview (PDF/DOCX fallback) -->
+              <div v-else class="raw-text-preview">
+                <div v-for="(record, idx) in uploadedData.slice(0, 3)" :key="idx" class="raw-text-item">
+                  <el-icon><Document /></el-icon>
+                  <span class="raw-text-content">{{ record.raw_text || record.raw_content || '非结构化数据' }}</span>
+                </div>
+                <div class="raw-text-hint">
+                  <el-tag type="warning" size="small">原始文本模式：MinerU 未提取到结构化表格，AI 将基于原始文本进行诊断</el-tag>
+                </div>
+              </div>
             </div>
 
-            <!-- Warning Banner -->
-            <div v-if="uploadWarning" class="warning-banner-box animate-fade-in">
-              <el-alert
-                :title="uploadWarning"
-                type="warning"
-                :closable="true"
-                show-icon
-                @close="uploadWarning = ''"
+            <div class="improvement-target-box mt-24">
+              <span class="filter-label-plain">质量改善目标 (可选)</span>
+              <el-input 
+                v-model="filter.improvementTarget" 
+                type="textarea"
+                :rows="2"
+                placeholder="请输入本次诊断改善的目标（如：良率提升至 98%、粗糙度偏差 < 0.2μm 等）"
+                class="target-input-area mt-8"
               />
             </div>
 
-            <div class="filter-panel">
-              <div class="filter-item">
-                <span class="filter-label">生产设备</span>
-                <el-select v-model="filter.device" placeholder="选择设备" class="custom-select">
-                  <el-option label="3号精密磨床" value="3_grinder" />
-                  <el-option label="5号CNC加工中心" value="5_cnc" />
-                </el-select>
-              </div>
-              <div class="filter-item">
-                <span class="filter-label">时间维度</span>
-                <el-select v-model="filter.timeRange" placeholder="选择时间" class="custom-select">
-                  <el-option label="最近24小时" value="24h" />
-                  <el-option label="最近7天" value="7d" />
-                  <el-option label="自定义" value="custom" />
-                </el-select>
-              </div>
-              <div class="filter-item">
-                <span class="filter-label">操作人</span>
-                <el-select v-model="filter.operator" placeholder="全部" class="custom-select">
-                  <el-option label="张伟" value="张伟" />
-                  <el-option label="李四" value="李四" />
-                </el-select>
+            <div class="focus-selection-box mt-24">
+              <span class="filter-label-plain">重点分析指标</span>
+              <div class="mt-8">
+                <el-checkbox-group v-model="filter.focusPoints">
+                   <el-checkbox label="包络数据分析" value="mean_diff" />
+                   <el-checkbox label="质量波动分析" value="process_capability" />
+                </el-checkbox-group>
               </div>
             </div>
 
-            <!-- Diagnosis Config Panel -->
-            <el-collapse v-model="activeConfigCollapse" class="config-collapse" v-show="filePaths.length > 0">
-              <el-collapse-item title="诊断配置" name="config">
-                <div class="config-panel">
-                  <div class="config-section">
-                    <label class="config-section-title">关注指标</label>
-                    <el-checkbox-group v-model="diagnosisConfig.focusMetrics">
-                      <el-checkbox label="合格率" />
-                      <el-checkbox label="尺寸偏差" />
-                      <el-checkbox label="表面粗糙度" />
-                      <el-checkbox label="圆度" />
-                      <el-checkbox label="波纹度" />
-                    </el-checkbox-group>
-                  </div>
-                  <div class="config-section">
-                    <label class="config-section-title">分析目标</label>
-                    <el-radio-group v-model="diagnosisConfig.analysisGoal">
-                      <el-radio label="root_cause">根因定位</el-radio>
-                      <el-radio label="trend_prediction">趋势预测</el-radio>
-                      <el-radio label="comprehensive_diagnosis">全面诊断</el-radio>
-                    </el-radio-group>
-                  </div>
-                  <div class="config-section">
-                    <label class="config-section-title">诊断深度</label>
-                    <div class="slider-row">
-                      <el-slider v-model="diagnosisConfig.depth" :min="1" :max="5" :marks="{ 1: '浅层', 3: '标准', 5: '深层' }" show-stops />
-                      <span class="slider-value">{{ diagnosisConfig.depth }}</span>
-                    </div>
-                  </div>
-                </div>
-              </el-collapse-item>
-            </el-collapse>
-
-            <div class="action-footer">
-              <el-button type="primary" size="large" class="btn-glow" :loading="loading" @click="startAIScan">
+            <div class="action-footer mt-32">
+              <el-button type="primary" size="large" class="btn-glow btn-wide" :loading="loading" @click="startAIScan">
                 开始智能化诊断
               </el-button>
             </div>
@@ -149,11 +112,11 @@
         </div>
       </div>
 
-      <!-- Step 1: AI Analyzing -->
-      <div v-if="currentStep === 1" class="step-container diagnostic-loading animate-fade-in">
+      <!-- Step Loading Stage (Hidden from stepper but used for transition) -->
+      <div v-if="currentStep === 99" class="step-container diagnostic-loading animate-fade-in">
         <div class="ai-processing-box">
           <div class="ai-orb"></div>
-          <h2 class="ai-status">专注于质量波动特征解析中...</h2>
+          <h2 class="ai-status">AI 正在深度解析检测数据特征...</h2>
           <el-progress :percentage="scanProgress" :stroke-width="8" class="scan-progress" />
           <div class="process-log">
             <p v-for="(log, index) in diagnosticLogs" :key="index" class="log-item">
@@ -163,103 +126,169 @@
         </div>
       </div>
 
-      <!-- Step 2: Result View -->
-      <div v-if="currentStep === 2" class="step-container animate-fade-in">
-        <!-- Low Confidence Warning -->
-        <div v-if="diagnosisResult?.low_confidence_warning" class="mb-16">
-          <el-alert
-            title="本次诊断置信度较低，结果仅供参考"
-            type="warning"
-            show-icon
-            :closable="false"
-          />
-        </div>
-
-        <!-- Charts Section -->
-        <div v-if="diagnosisResult?.charts && diagnosisResult.charts.length > 0" class="charts-section mb-16 card">
-          <div class="card-header">
-            <span class="header-tag">可视化分析</span>
-            <h3 class="card-title">AI 诊断图表</h3>
-          </div>
-          <div class="card-body charts-grid">
-            <div v-for="(chart, idx) in diagnosisResult.charts" :key="idx" class="chart-image-wrapper">
-              <img :src="chart.startsWith('/') ? chart : `/api/static/charts/${chart}`" :alt="`诊断图表 ${idx + 1}`" class="chart-image" />
-            </div>
-          </div>
-        </div>
-
-        <!-- Statistics Table -->
-        <div v-if="diagnosisResult?.statistics && diagnosisResult.statistics.length > 0" class="statistics-section mb-16 card">
-          <div class="card-header">
-            <span class="header-tag">数据概览</span>
-            <h3 class="card-title">关键统计指标</h3>
-          </div>
-          <div class="card-body">
-            <el-table :data="diagnosisResult.statistics" border stripe class="custom-table">
-              <el-table-column prop="metric" label="指标" width="120" />
-              <el-table-column prop="max" label="最大值" width="100" />
-              <el-table-column prop="min" label="最小值" width="100" />
-              <el-table-column prop="mean" label="均值" width="100" />
-              <el-table-column prop="std" label="标准差" width="100" />
-              <el-table-column prop="envelope" label="波动包络" />
-            </el-table>
-          </div>
-        </div>
-
-        <div class="grid-layout">
-          <!-- Left: Quality Trend -->
-          <div class="card chart-card">
-            <div class="card-header">
-              <span class="header-tag">指标监控</span>
-              <h3 class="card-title">质量合格率波动趋势</h3>
+      <!-- Step 1: Data Visualization -->
+      <div v-if="currentStep === 1" class="step-container animate-fade-in">
+        <div class="dashboard-visual">
+          <!-- Stats Summary Table (Replacing Stats Grid) -->
+          <div class="card stats-summary-card mb-24">
+            <div class="card-header border-b">
+              <h3 class="card-title-sm">检测包络数据统计</h3>
             </div>
             <div class="card-body">
-              <div id="trendChart" class="chart-container"></div>
+              <el-table :data="itemStatsTable" border stripe size="mini" class="stats-summary-table">
+                <el-table-column prop="key" label="检测指标 / 源文件" min-width="150" />
+                <el-table-column prop="count" label="样本总数" width="100" align="center" />
+                <el-table-column prop="mean" label="均值" width="120" align="center" />
+                <el-table-column prop="max" label="最大值" width="120" align="center">
+                  <template #default="scope">
+                    <span class="text-danger-custom font-bold">{{ scope.row.max }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="min" label="最小值" width="120" align="center">
+                  <template #default="scope">
+                    <span class="text-primary-custom font-bold">{{ scope.row.min }}</span>
+                  </template>
+                </el-table-column>
+              </el-table>
             </div>
           </div>
 
-          <!-- Right: Root Causes -->
-          <div class="card causes-card">
-            <div class="card-header">
-              <span class="header-tag danger">核心根因</span>
-              <h3 class="card-title">AI 推理异常链路对齐</h3>
-            </div>
-            <div class="card-body">
-              <div v-for="cause in diagnosisResult.root_causes" :key="cause.rank" class="cause-item">
-                <div class="cause-rank">NO.{{ cause.rank }}</div>
-                <div class="cause-info">
-                  <div class="cause-title-row">
-                    <h4 class="cause-name">{{ cause.cause }}</h4>
-                    <el-tag :type="getTagType(cause.category)" size="small" effect="dark">{{ cause.category }}</el-tag>
-                    <span class="confidence">置信度: {{ (cause.confidence * 100).toFixed(0) }}%</span>
+          <!-- Main Charts Grid -->
+          <div class="grid-layout">
+            <!-- Xbar-S Chart (Full Row) -->
+            <div v-if="filter.focusPoints.includes('mean_diff')" class="card chart-card full-row">
+              <div class="card-header"><h3 class="card-title">增压电磁阀性能包络分析 (最大/最小值)</h3></div>
+              <div class="card-body">
+                <div class="xbar-s-container">
+                  <div class="chart-panel">
+                    <div class="panel-label">X-bar (均值)</div>
+                    <div class="canvas-wrapper-sm"><canvas id="runChartCanvas"></canvas></div>
                   </div>
-                  <p class="cause-impact">{{ cause.impact }}</p>
-                  <div class="evidence-list">
-                    <div v-for="(ev, idx) in cause.evidence" :key="idx" class="evidence-tag">
-                      <el-icon><Check /></el-icon> {{ ev }}
-                    </div>
+                  <div class="chart-panel mt-16">
+                    <div class="panel-label">S (标准差)</div>
+                    <div class="canvas-wrapper-sm"><canvas id="sChartCanvas"></canvas></div>
                   </div>
                 </div>
               </div>
+            </div>
+
+            <!-- Quality Reports Section (Added below Xbar-S) -->
+            <div v-if="filter.focusPoints.includes('mean_diff')" class="card report-list-card full-row mb-24 anim-slide-up">
+              <div class="card-header border-b flex justify-between items-center">
+                <h3 class="card-title-sm">关联质检文件预览</h3>
+              </div>
+              <div class="card-body p-0">
+                <div class="report-document-container" @click="openReportPreview">
+                  <div class="report-doc-mock">
+                    <div class="doc-red-border">
+                      <div class="doc-header-info">
+                        <div class="info-left">
+                          <div class="info-row"><span class="label">档号</span><span class="value underline-red"></span></div>
+                          <div class="info-row"><span class="label">保管期限</span><span class="value underline-red"></span></div>
+                        </div>
+                        <div class="info-right">
+                          <div class="info-row"><span class="label">编号</span><span class="value underline-red">13JPSBG-2025194</span></div>
+                          <div class="info-row"><span class="label">密级</span><span class="value underline-red">内部</span></div>
+                          <div class="info-row"><span class="label">保密期限</span><span class="value underline-red"></span></div>
+                          <div class="info-row"><span class="label">阶段标记</span><span class="value underline-red">S</span></div>
+                        </div>
+                      </div>
+                      <div class="doc-content-body">
+                         <div class="doc-series">XX 系列型号</div>
+                         <div class="doc-model">XX-0 增压电磁阀</div>
+                         <div class="doc-title">产品生产质量报告</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="fade-overlay"></div>
+                  <div class="view-more-btn-box">
+                    <el-button type="primary" size="large" :icon="View" @click="openReportPreview">点击解析并查看完整报告</el-button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- SPC Chart -->
+            <div class="card chart-card">
+              <div class="card-header"><h3 class="card-title">增加电磁阀电阻质量历史波动</h3></div>
+              <div class="card-body"><div class="canvas-wrapper"><canvas id="controlChartCanvas"></canvas></div></div>
+            </div>
+
+            <!-- New Fluctuation Chart -->
+            <div class="card chart-card">
+              <div class="card-header"><h3 class="card-title">增加电磁阀响应时间历史波动</h3></div>
+              <div class="card-body"><div class="canvas-wrapper"><canvas id="controlChartCanvas2"></canvas></div></div>
+            </div>
+
+            <!-- Run Chart (Only if Xbar-S not shown) -->
+            <div class="card chart-card" v-if="!filter.focusPoints.includes('mean_diff')">
+              <div class="card-header"><h3 class="card-title">Run Chart 运行图</h3></div>
+              <div class="card-body"><div class="canvas-wrapper"><canvas id="runChartCanvas"></canvas></div></div>
             </div>
           </div>
         </div>
 
         <div class="action-footer mt-24">
-          <el-button size="large" @click="currentStep = 0">重置诊断</el-button>
-          <el-button type="primary" size="large" @click="handleGenerateSolutions">生成针对性改进方案</el-button>
+          <el-button size="large" @click="goToStep(0)">返回重选数据</el-button>
+          <el-button type="primary" size="large" @click="goToStep(2)">执行智能分析与方案规划</el-button>
         </div>
       </div>
 
-      <!-- Step 3: Solutions -->
+      <!-- Step 2: AI Data Analysis -->
+      <div v-if="currentStep === 2" class="step-container animate-fade-in">
+        <div class="card roots-card mb-24">
+          <div class="card-header">
+            <span class="header-tag danger">AI 核心根因诊断</span>
+            <h3 class="card-title">异常链路推理结果 (自动规划中...)</h3>
+          </div>
+          <div class="card-body" v-if="diagnosisResult">
+            <div v-for="cause in diagnosisResult.root_causes" :key="cause.rank" class="cause-item">
+              <div class="cause-rank">NO.{{ cause.rank }}</div>
+              <div class="cause-info">
+                <div class="cause-title-row">
+                  <h4 class="cause-name">{{ cause.cause }}</h4>
+                  <el-tag :type="getTagType(cause.category)" size="small" effect="dark">{{ cause.category }}</el-tag>
+                  <span class="confidence">置信度: {{ (cause.confidence * 100).toFixed(0) }}%</span>
+                </div>
+                <p class="cause-impact">{{ cause.impact }}</p>
+                <div class="evidence-list">
+                  <div v-for="(ev, idx) in cause.evidence" :key="idx" class="evidence-tag">
+                    <el-icon><Check /></el-icon> {{ ev }}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="card-body text-center py-40" v-else>
+            <el-icon class="is-loading" :size="32"><Loading /></el-icon>
+            <p class="mt-16">AI 正在深度推理根因中，请稍候...</p>
+          </div>
+        </div>
+
+        <div class="action-footer">
+          <el-button size="large" @click="goToStep(1)">返回可视化视图</el-button>
+          
+          <div v-if="solutions.length === 0" class="auto-planning-hint ml-16">
+            <el-icon class="is-loading"><Loading /></el-icon>
+            AI 正在自动规划改进方案...
+          </div>
+          <el-button 
+            v-else 
+            type="primary" 
+            size="large" 
+            @click="goToStep(3); nextTick(() => initPortraitCharts())"
+          >
+            查看智能化改进方案 <el-icon class="el-icon--right"><ArrowRight /></el-icon>
+          </el-button>
+        </div>
+      </div>
+
+      <!-- Step 3: Improvement Plan -->
       <div v-if="currentStep === 3" class="step-container animate-fade-in">
-        <div class="card solution-card">
+        <div class="card solution-card mb-24">
           <div class="card-header header-flex">
             <h3 class="card-title">智能化质量体系改进规划</h3>
             <div class="header-actions">
-              <el-button type="info" plain class="btn-sm" @click="previewReport">
-                <el-icon><View /></el-icon> 报告预览
-              </el-button>
               <el-button type="primary" plain class="btn-sm" @click="exportReport">
                 <el-icon><Download /></el-icon> 下载诊断报告
               </el-button>
@@ -277,353 +306,68 @@
               <el-table-column prop="responsible" label="协同部门" width="120" />
               <el-table-column prop="expected_effect" label="预期产出" min-width="180" />
               <el-table-column prop="implementation_time" label="建议周期" width="120" />
-              <el-table-column label="决策" width="160">
-                <template #default="scope">
-                  <el-button type="primary" link @click="createWorkOrder(scope.row)">指派工单</el-button>
-                  <el-button type="warning" link @click="openFeedbackDialog(scope.row)">试验反馈</el-button>
-                </template>
-              </el-table-column>
             </el-table>
           </div>
-          <div class="card-footer text-center">
-            <el-button type="primary" size="large" @click="currentStep = 4; nextTick(() => initVerificationCharts())">进入归因验证分析</el-button>
-            <el-button size="large" @click="reset">归档并返回</el-button>
-          </div>
         </div>
 
-        <el-dialog v-model="feedbackVisible" title="改进方案试验反馈" width="500px" append-to-body>
-          <el-form :model="feedbackForm" label-width="100px">
-            <el-form-item label="改进项">
-              <el-input v-model="feedbackForm.action" disabled />
-            </el-form-item>
-            <el-form-item label="试验状态">
-              <el-radio-group v-model="feedbackForm.status">
-                <el-radio label="已完成">执行完毕</el-radio>
-                <el-radio label="试验中">持续观察</el-radio>
-              </el-radio-group>
-            </el-form-item>
-            <el-form-item label="试验结果">
-              <el-input 
-                type="textarea" 
-                v-model="feedbackForm.result" 
-                placeholder="请输入试验后的质量表现、数值提升等关键结论"
-                :rows="3"
-              />
-            </el-form-item>
-            <el-form-item label="合格率提升">
-              <el-input-number v-model="feedbackForm.improvement" :precision="2" :step="0.1" :max="100" />
-              <span class="ml-8">%</span>
-            </el-form-item>
-          </el-form>
-          <template #footer>
-            <el-button @click="feedbackVisible = false">取消</el-button>
-            <el-button type="primary" @click="submitFeedback">提交反馈数据</el-button>
-          </template>
-        </el-dialog>
-
-        <!-- New: Multidimensional Portrait Charts -->
-        <div class="grid-layout mt-24">
-          <div class="card chart-card">
-            <div class="card-header">
-              <span class="header-tag">体系对齐</span>
-              <h3 class="card-title">6M 多维质量成熟度画像</h3>
-            </div>
-            <div class="card-body">
-              <div id="radarChart" class="chart-container-sm"></div>
-            </div>
-          </div>
-          <div class="card predictor-card">
-            <div class="card-header">
-              <span class="header-tag">效益预估</span>
-              <h3 class="card-title">方案实施预期 ROI 预测</h3>
-            </div>
-            <div class="card-body">
-              <div id="predictorChart" class="chart-container-sm"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Step 4: Attribution Analysis -->
-      <div v-if="currentStep === 4" class="step-container animate-fade-in">
-        <div class="grid-layout">
-          <!-- Verification Chart -->
-          <div class="card chart-card">
-            <div class="card-header">
-              <span class="header-tag">方案验证</span>
-              <h3 class="card-title">改进前后质量指标对比 (Before vs After)</h3>
-            </div>
-            <div class="card-body">
-              <div id="verificationChart" class="chart-container"></div>
-            </div>
-          </div>
-
-          <!-- Attribution Analysis -->
-          <div class="card attribution-card">
-            <div class="card-header">
-              <span class="header-tag">深度归因</span>
-              <h3 class="card-title">AI 效能归因与闭环分析</h3>
-            </div>
-            <div class="card-body">
-              <div class="attribution-content">
-                <div class="summary-stat">
-                  <div class="stat-item">
-                    <span class="label">平均良率提升</span>
-                    <span class="value text-success">+{{ avgImprovement }}%</span>
-                  </div>
-                  <div class="stat-item">
-                    <span class="label">风险消除率</span>
-                    <span class="value text-primary">94.2%</span>
-                  </div>
-                </div>
-
-                <div class="logic-flow">
-                  <h4 class="sub-title">AI 归因逻辑链条</h4>
-                  <el-timeline>
-                    <el-timeline-item timestamp="逻辑验证" type="primary" :icon="Cpu">
-                      <p class="logic-desc">诊断定位的“3号磨床砂轮振动”在采取“动态主轴动平衡补偿”后，异常谐波幅值下降 82.5%。</p>
-                    </el-timeline-item>
-                    <el-timeline-item timestamp="因果关联" type="success" :icon="Connection">
-                      <p class="logic-desc">试验数据反馈显示，工件表面粗糙度合格率由 89% 提升至 97.4%，与改进方案具有极强因果正相关。</p>
-                    </el-timeline-item>
-                    <el-timeline-item timestamp="结论闭环" type="info" :icon="CircleCheck">
-                      <p class="logic-desc">质量波动已受控，建议将此改进参数沉淀至 SOP 知识库，作为标准化工艺基准。</p>
-                    </el-timeline-item>
-                  </el-timeline>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="action-footer mt-24 decision-box">
-          <div class="decision-label">根据试验效果决策下一步：</div>
-          <div class="decision-btns">
-            <el-button @click="currentStep = 3">重新分析改进方案</el-button>
-            <el-button type="primary" size="large" class="btn-glow" @click="currentStep = 5">
-              采纳改进方案并进入 T-test 验证
-            </el-button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Step 5: Two-sample T-test -->
-      <div v-if="currentStep === 5" class="step-container animate-fade-in">
-        <div class="card ttest-card">
+        <div class="card roi-card">
           <div class="card-header">
-            <span class="header-tag">统计推断</span>
-            <h3 class="card-title">双样本 T-test 效应显著性分析</h3>
+            <span class="header-tag">效益预估</span>
+            <h3 class="card-title">方案实施预期 ROI 预测</h3>
           </div>
           <div class="card-body">
-            <div class="ttest-layout">
-              <!-- Data Import Section -->
-              <div class="ttest-upload-section">
-                <div class="upload-title">上传后续实际生产检测数据</div>
-                <el-upload
-                  class="mini-upload"
-                  drag
-                  action="#"
-                  :auto-upload="false"
-                  :on-change="handleTtestFileChange"
-                >
-                  <el-icon class="el-icon--upload"><Upload /></el-icon>
-                  <div class="el-upload__text">拖拽或点击上传验证数据</div>
-                </el-upload>
-                
-                <div v-if="ttestDataUploaded" class="validation-status success animate-fade-in">
-                  <el-icon><CircleCheck /></el-icon> 已识别 128 条后续生产记录
-                </div>
-              </div>
+            <div id="predictorChart" class="chart-container-sm"></div>
+          </div>
+        </div>
 
-              <!-- Metrics Comparison -->
-              <div class="ttest-results-section" v-if="ttestDataUploaded">
-                <div class="grid-layout">
-                  <div class="chart-box">
-                    <div id="distributionChart" class="chart-container-sm"></div>
-                  </div>
-                  <div class="stats-summary">
-                    <h4 class="sub-title">统计学指标分析结论</h4>
-                    <div class="metric-grid">
-                      <div class="metric-card">
-                        <span class="label">P-Value (显著性)</span>
-                        <span class="value text-success">0.024</span>
-                        <span class="hint">小于 0.05，改善具有统计学意义</span>
-                      </div>
-                      <div class="metric-card">
-                        <span class="label">效应量 (Cohen's d)</span>
-                        <span class="value text-primary">0.82</span>
-                        <span class="hint">大效应量</span>
-                      </div>
-                      <div class="metric-card">
-                        <span class="label">置信区间 (95% CI)</span>
-                        <span class="value text-dark">[1.2%, 4.5%]</span>
-                        <span class="hint">指标提升的稳态区间</span>
-                      </div>
-                    </div>
-                    
-                    <div class="conclusion-box mt-16">
-                      <el-alert
-                        title="AI 终审建议：全面实施工艺改进"
-                        type="success"
-                        description="基于双样本 T-test 验证，当前改进方案对良率提升具有显著正相关作用。建议进入标准化作业 (SOP) 流程，并建议在全线推广。"
-                        show-icon
-                        :closable="false"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="card-footer text-center mt-24">
-            <el-button @click="currentStep = 4">重新分析数据</el-button>
-            <el-button type="primary" size="large" class="btn-glow" @click="goToSOP">
-              生成质量改进固本方案 (SOP)
-            </el-button>
-          </div>
+        <div class="card-footer text-center mt-24">
+          <el-button size="large" @click="reset">归档并返回</el-button>
         </div>
       </div>
 
-      <!-- Step 6: Solidified SOP & Dashboard -->
-      <div v-if="currentStep === 6" class="step-container animate-fade-in dashboard-mode">
-        <!-- Role Selector -->
-        <div class="role-selector card">
-          <div class="selector-label">切换视图角色：</div>
-          <el-radio-group v-model="activeRole" class="custom-radio">
-            <el-radio-button label="manager">车间主任</el-radio-button>
-            <el-radio-button label="qc">质检工程师</el-radio-button>
-            <el-radio-button label="process">工艺工程师</el-radio-button>
-          </el-radio-group>
-        </div>
-
-        <div class="dashboard-grid">
-          <!-- Left: SOP Document -->
-          <div class="card sop-document">
-            <div class="card-header header-flex">
-              <h3 class="card-title"><el-icon><Management /></el-icon> 标准化作业 (SOP) 固本方案</h3>
-              <div class="header-actions">
-                <el-button type="primary" link @click="archiveSop">方案存档</el-button>
-                <el-button type="primary" link @click="downloadWord"><el-icon><Download /></el-icon> 下载 Word 版</el-button>
-              </div>
-            </div>
-            <div class="card-body scrollable-content">
-              <div class="sop-content">
-                <section class="sop-section">
-                  <h4 class="sop-title">1. 背景与目标</h4>
-                  <p>针对 3号精密磨床 出现的表面粗糙度周期性超差问题（异常码：ERR-2024-0032），通过 AI 进行根因分析与验证，本方案旨在将成功的改进措施固化，防止波动再次发生。</p>
-                </section>
-                <section class="sop-section">
-                  <h4 class="sop-title">2. 核心改进措施</h4>
-                  <div class="sop-table-wrapper">
-                    <table class="sop-mini-table">
-                      <thead>
-                        <tr><th>维度</th><th>原作业参数</th><th>固化后标准 (SOP)</th></tr>
-                      </thead>
-                      <tbody>
-                        <tr><td>主轴频率</td><td>50Hz 固定</td><td>动态闭环补频 (48.5Hz-51.2Hz)</td></tr>
-                        <tr><td>进给量</td><td>0.05mm/s</td><td>0.042mm/s (精度优先级)</td></tr>
-                        <tr><td>冷却液压力</td><td>0.2MPa</td><td>恒压 0.28MPa ±0.01</td></tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </section>
-                <section class="sop-section">
-                  <h4 class="sop-title">3. 监测与闭环</h4>
-                  <p>每日 8:00 执行 X-bar 控制图点检，若连续 3 点处于 C 区偏上，立即启动 AI 预警并执行自动补正程序。</p>
-                </section>
-              </div>
-              <div class="sop-footer mt-16">
-                 <el-button type="info" plain block @click="currentStep = 3">重新生成方案</el-button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Right: Reporting Dashboard -->
-          <div class="report-view">
-            <!-- Manager View: Highlights, Pareto, Quality Comparison -->
-            <div v-show="activeRole === 'manager'" class="role-view animate-fade-in">
-              <div class="report-row">
-                <div class="card stat-card">
-                  <div class="card-body">
-                    <div class="stat-main">
-                      <span class="label">综合达成率</span>
-                      <span class="value">98.4%</span>
-                      <el-tag type="success">↑ 9.4%</el-tag>
-                    </div>
-                  </div>
-                </div>
-                <div class="card stat-card">
-                  <div class="card-body">
-                    <div class="stat-main">
-                      <span class="label">良率波动率</span>
-                      <span class="value">1.2%</span>
-                      <el-tag type="info">稳定</el-tag>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div class="card chart-card-lg mt-16">
-                <div class="card-header"><h4 class="card-title">关键指标汇总与帕累托图柱状分析</h4></div>
-                <div class="card-body">
-                  <div id="paretoChart" class="chart-container-sm"></div>
-                </div>
-              </div>
-            </div>
-
-            <!-- QC View: Control Charts, Run Chart -->
-            <div v-show="activeRole === 'qc'" class="role-view animate-fade-in">
-              <div class="card chart-card-lg">
-                <div class="card-header"><h4 class="card-title">X-bar 控制图 (SPC 实时监测)</h4></div>
-                <div class="card-body">
-                  <div id="controlChart" class="chart-container-sm"></div>
-                </div>
-              </div>
-              <div class="card chart-card-lg mt-16">
-                <div class="card-header"><h4 class="card-title">Run Chart (全生命周期运行趋势)</h4></div>
-                <div class="card-body">
-                  <div id="runChart" class="chart-container-sm"></div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Process View: Causal/Fishbone, Network Diagram -->
-            <div v-show="activeRole === 'process'" class="role-view animate-fade-in">
-               <div class="card chart-card-lg">
-                <div class="card-header"><h4 class="card-title">质量根因因果链路 (Fishbone Mapping)</h4></div>
-                <div class="card-body">
-                  <div id="fishboneChart" class="chart-container-sm"></div>
-                </div>
-              </div>
-              <div class="card chart-card-lg mt-16">
-                <div class="card-header"><h4 class="card-title">设备-参数-质量网状拓扑图</h4></div>
-                <div class="card-body">
-                  <div id="networkChart" class="chart-container-sm"></div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="action-footer mt-24">
-           <el-button type="success" size="large" class="btn-glow" @click="reset">沉淀至专家库并返回</el-button>
-        </div>
-      </div>
     </div>
+
+    <!-- Report Preview Dialog -->
+    <el-dialog
+      v-model="reportPreviewVisible"
+      fullscreen
+      append-to-body
+      destroy-on-close
+      class="full-page-dialog"
+    >
+      <ReportPreviewModal id="IP-001" @close="reportPreviewVisible = false" />
+    </el-dialog>
   </div>
 </template>
 
+<script>
+// Non-reactive storage to avoid circular dependency serialization in Vue/AI Studio
+// These instances contain deep circular references that shouldn't be proxied by Vue or serialized
+const chartInstances = {
+  run: null,
+  control: null,
+  control2: null,
+  pareto: null,
+  s: null
+}
+const ecInstances = new Set()
+</script>
+
 <script setup>
-import { ref, reactive, nextTick, markRaw, watch } from 'vue'
+import { ref, reactive, nextTick, markRaw, watch, computed, onMounted, onUnmounted, shallowRef } from 'vue'
 import { useRouter } from 'vue-router'
+import ReportPreviewModal from './components/ReportPreviewModal.vue'
 import { 
-  Upload, Cpu, PieChart, CircleCheck, ArrowLeft, 
+  Upload, Cpu, PieChart, CircleCheck, ArrowLeft, ArrowRight, Document,
   UploadFilled, Check, Download, Loading, View, Odometer, Connection, Management 
 } from '@element-plus/icons-vue'
 import { ElMessage, ElLoading } from 'element-plus'
 import * as echarts from 'echarts'
+import Chart from 'chart.js/auto'
 
 const router = useRouter()
 const currentStep = ref(0)
+const isAutoMode = ref(false)
 const loading = ref(false)
 const scanProgress = ref(0)
 const diagnosticLogs = ref([])
@@ -641,13 +385,324 @@ const feedbackList = ref([])
 const ttestDataUploaded = ref(false)
 const ttestData = ref([])
 const activeRole = ref('manager')
+const reportPreviewVisible = ref(false)
 
-const activeConfigCollapse = ref([])
-const diagnosisConfig = ref({
-  focusMetrics: [],
-  analysisGoal: 'root_cause',
-  depth: 3,
+const openReportPreview = () => {
+  reportPreviewVisible.value = true
+}
+
+// Use shallowRef for objects that don't need deep reactivity but might be complex
+const diagnosisResult = shallowRef(null)
+const solutions = shallowRef([])
+
+let scanInterval = null
+
+// Computed stats for text panel
+const itemStatsTable = computed(() => {
+  if (uploadedData.value.length === 0) return []
+  
+  const groups = {}
+  uploadedData.value.forEach(record => {
+    const groupKey = record.fileName || record.检测项 || '默认控制项'
+    if (!groups[groupKey]) {
+      groups[groupKey] = []
+    }
+    const val = parseFloat(record.实测值)
+    if (!isNaN(val)) {
+      groups[groupKey].push(val)
+    }
+  })
+  
+  return Object.keys(groups).map(key => {
+    const vals = groups[key]
+    const count = vals.length
+    if (count === 0) return { key, count: 0, mean: '0.0000', max: '0.0000', min: '0.0000' }
+    
+    const sum = vals.reduce((a, b) => a + b, 0)
+    const mean = sum / count
+    const max = Math.max(...vals)
+    const min = Math.min(...vals)
+    
+    return {
+      key,
+      count,
+      mean: mean.toFixed(4),
+      max: max.toFixed(4),
+      min: min.toFixed(4)
+    }
+  })
 })
+
+const meanValue = computed(() => {
+  if (uploadedData.value.length === 0) return 0
+  const values = uploadedData.value.map(r => parseFloat(r.实测值)).filter(v => !isNaN(v))
+  if (values.length === 0) return 0
+  return values.reduce((a, b) => a + b, 0) / values.length
+})
+
+const variance = computed(() => {
+  if (uploadedData.value.length === 0) return 0
+  const values = uploadedData.value.map(r => parseFloat(r.实测值)).filter(v => !isNaN(v))
+  if (values.length === 0) return 0
+  const m = meanValue.value
+  return values.reduce((a, b) => a + (b - m) ** 2, 0) / values.length
+})
+
+const stdDev = computed(() => Math.sqrt(variance.value))
+
+const initSamplingCharts = () => {
+  if (uploadedData.value.length === 0) return
+
+  const values = uploadedData.value.map(r => parseFloat(r.实测值)).filter(v => !isNaN(v))
+  const labels = uploadedData.value.map((r, i) => {
+    if (r.日期) {
+      // Use only the date part YYYY-MM-DD
+      return r.日期.includes(' ') ? r.日期.split(' ')[0] : r.日期;
+    }
+    // Fallback: Generate sequential historical dates for demo
+    const d = new Date();
+    d.setDate(d.getDate() - (uploadedData.value.length - i - 1));
+    return d.toISOString().split('T')[0];
+  })
+  const mean = meanValue.value
+  const sd = stdDev.value
+
+  // Helper for horizontal line datasets (center, ucl, lcl)
+  const getHorizontalLine = (val, color, dash = []) => ({
+    label: '',
+    data: labels.map(() => val),
+    borderColor: color,
+    borderWidth: 1.5,
+    pointRadius: 0,
+    fill: false,
+    borderDash: dash
+  });
+
+  // Run Chart / X-bar Chart
+  const runCtx = document.getElementById('runChartCanvas')?.getContext('2d')
+  if (runCtx) {
+    if (chartInstances.run) chartInstances.run.destroy()
+    
+    // For Xbar-S, we want limit lines in the plot
+    const ucl_x = mean + 1.2 * sd
+    const lcl_x = mean - 1.2 * sd
+
+    chartInstances.run = new Chart(runCtx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: '均值点',
+            data: values,
+            borderColor: '#1e293b',
+            backgroundColor: '#1e293b',
+            borderWidth: 1.5,
+            tension: 0,
+            pointRadius: 3,
+            pointStyle: 'circle'
+          },
+          getHorizontalLine(mean, '#16a34a'), // Green Mean line
+          getHorizontalLine(ucl_x, '#ef4444', [5, 5]), // Red UCL
+          getHorizontalLine(lcl_x, '#ef4444', [5, 5])  // Red LCL
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { display: true, color: '#f1f5f9' }, ticks: { font: { size: 10 } } },
+          y: { grid: { display: true, color: '#f1f5f9' }, ticks: { font: { size: 10 } } }
+        }
+      }
+    })
+  }
+
+  // S Chart (Sample StdDev) - Only if required by UI
+  const sCtx = document.getElementById('sChartCanvas')?.getContext('2d')
+  if (sCtx) {
+    if (chartInstances.s) chartInstances.s.destroy()
+    
+    // Simulate S values (standard deviation ripple)
+    const sValues = values.map((v, i) => {
+      const v_prev = values[i-1] || v
+      return Math.abs(v - v_prev) * 0.4 + 0.1
+    })
+    const sMean = sValues.reduce((a,b)=>a+b,0) / sValues.length
+    const ucl_s = sMean * 2.2
+    const lcl_s = sMean * 0.2
+
+    chartInstances.s = new Chart(sCtx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: '标准差点',
+            data: sValues,
+            borderColor: '#1e293b',
+            backgroundColor: '#1e293b',
+            borderWidth: 1.5,
+            tension: 0,
+            pointRadius: 3
+          },
+          getHorizontalLine(sMean, '#16a34a'),
+          getHorizontalLine(ucl_s, '#ef4444', [5, 5]),
+          getHorizontalLine(lcl_s, '#ef4444', [5, 5])
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { display: true, color: '#f1f5f9' }, ticks: { font: { size: 10 } } },
+          y: { grid: { display: true, color: '#f1f5f9' }, ticks: { font: { size: 10 } } }
+        }
+      }
+    })
+  }
+
+  // Control Chart (SPC)
+  const spcCtx = document.getElementById('controlChartCanvas')?.getContext('2d')
+  if (spcCtx) {
+    if (chartInstances.control) chartInstances.control.destroy()
+    const ucl = mean + 3 * sd
+    const lcl = mean - 3 * sd
+    
+    chartInstances.control = new Chart(spcCtx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: '实测值',
+            data: values,
+            borderColor: '#003366',
+            backgroundColor: (context) => {
+              const value = context.raw
+              return (value > ucl || value < lcl) ? '#ef4444' : '#003366'
+            },
+            pointBackgroundColor: (context) => {
+              const value = context.raw
+              return (value > ucl || value < lcl) ? '#ef4444' : '#003366'
+            },
+            borderWidth: 1.5,
+            tension: 0,
+            pointRadius: 4,
+          },
+          {
+            label: 'CL',
+            data: labels.map(() => mean),
+            borderColor: '#000000',
+            borderWidth: 1,
+            pointRadius: 0,
+            fill: false,
+          },
+          {
+            label: 'UCL',
+            data: labels.map(() => ucl),
+            borderColor: '#ef4444',
+            borderWidth: 1,
+            borderDash: [5, 5],
+            pointRadius: 0,
+            fill: false,
+          },
+          {
+            label: 'LCL',
+            data: labels.map(() => lcl),
+            borderColor: '#ef4444',
+            borderWidth: 1,
+            borderDash: [5, 5],
+            pointRadius: 0,
+            fill: false,
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { display: true, color: '#f1f5f9' } },
+          y: { grid: { display: true, color: '#f1f5f9' } }
+        }
+      }
+    })
+  }
+
+  // Control Chart 2 (Response Time)
+  const spcCtx2 = document.getElementById('controlChartCanvas2')?.getContext('2d')
+  if (spcCtx2) {
+    if (chartInstances.control2) chartInstances.control2.destroy()
+    // Using slightly different mean/sd for visual variety, though based on same data
+    const mean2 = mean * 0.8
+    const sd2 = sd * 1.2
+    const ucl2 = mean2 + 3 * sd2
+    const lcl2 = mean2 - 3 * sd2
+    
+    chartInstances.control2 = new Chart(spcCtx2, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: '实测值',
+            data: values.map(v => v * (0.75 + Math.random() * 0.1)),
+            borderColor: '#0891b2',
+            backgroundColor: (context) => {
+              const value = context.raw
+              return (value > ucl2 || value < lcl2) ? '#ef4444' : '#0891b2'
+            },
+            pointBackgroundColor: (context) => {
+              const value = context.raw
+              return (value > ucl2 || value < lcl2) ? '#ef4444' : '#0891b2'
+            },
+            borderWidth: 1.5,
+            tension: 0,
+            pointRadius: 4,
+          },
+          {
+            label: 'CL',
+            data: labels.map(() => mean2),
+            borderColor: '#000000',
+            borderWidth: 1,
+            pointRadius: 0,
+            fill: false,
+          },
+          {
+            label: 'UCL',
+            data: labels.map(() => ucl2),
+            borderColor: '#ef4444',
+            borderWidth: 1,
+            borderDash: [5, 5],
+            pointRadius: 0,
+            fill: false,
+          },
+          {
+            label: 'LCL',
+            data: labels.map(() => lcl2),
+            borderColor: '#ef4444',
+            borderWidth: 1,
+            borderDash: [5, 5],
+            pointRadius: 0,
+            fill: false,
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { display: true, color: '#f1f5f9' } },
+          y: { grid: { display: true, color: '#f1f5f9' } }
+        }
+      }
+    })
+  }
+}
 
 const goToSOP = () => {
   currentStep.value = 6
@@ -660,117 +715,271 @@ const archiveSop = () => ElMessage.success('SOP 已成功归档至企业专家�
 const downloadWord = () => ElMessage.info('Word 报告生成中...')
 
 const initDashboardCharts = () => {
-  initParetoChart()
-  initControlChart()
-  initRunChart()
-  initFishboneChart()
-  initNetworkChart()
-}
-
-const initParetoChart = () => {
-  const dom = document.getElementById('paretoChart')
-  if (!dom) return
-  const chart = echarts.init(dom)
-  chart.setOption({
-    tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
-    xAxis: { type: 'category', data: ['磨损', '振动', '压力', '温度', '其他'] },
-    yAxis: [{ type: 'value', name: '频次' }, { type: 'value', name: '百分比', axisLabel: { formatter: '{value}%' } }],
-    series: [
-      { name: '频次', type: 'bar', data: [80, 50, 40, 20, 10], itemStyle: { color: '#409eff' } },
-      { name: '累计百分比', type: 'line', yAxisIndex: 1, data: [40, 65, 85, 95, 100], itemStyle: { color: '#67c23a' } }
-    ]
+  nextTick(() => {
+    initParetoChartReport()
+    initFishboneChartReport()
+    initRunChartReport()
+    initControlChartReport()
+    initComparisonChartReport()
+    initWaterfallChartReport()
+    initRadarChartReport()
   })
 }
 
-const initControlChart = () => {
-  const dom = document.getElementById('controlChart')
+// 01. Pareto Report
+const initParetoChartReport = () => {
+  const dom = document.getElementById('paretoChartReport')
   if (!dom) return
-  const chart = echarts.init(dom)
+  const chart = echarts.getInstanceByDom(dom) || echarts.init(dom)
   chart.setOption({
-    title: { text: 'X-bar 控制图', left: 'center', textStyle: { fontSize: 12 } },
-    xAxis: { type: 'category', data: ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8'] },
-    yAxis: { type: 'value', min: 14, max: 16 },
+    tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
+    grid: { top: '15%', bottom: '15%', left: '10%', right: '10%' },
+    xAxis: { type: 'category', data: ['磨损', '振动', '压力', '温度', '其他'], axisLabel: { fontSize: 10 } },
+    yAxis: [{ type: 'value', name: '频次' }, { type: 'value', name: '百分比', axisLabel: { formatter: '{value}%' } }],
+    series: [
+      { name: '频次', type: 'bar', data: [80, 50, 40, 20, 10], itemStyle: { color: '#0f172a' } },
+      { name: '累计百分比', type: 'line', yAxisIndex: 1, data: [40, 65, 85, 95, 100], itemStyle: { color: '#ef4444' } }
+    ]
+  })
+  requestAnimationFrame(() => chart.resize())
+}
+
+// 02. Fishbone Report
+const initFishboneChartReport = () => {
+  const dom = document.getElementById('fishboneChartReport')
+  if (!dom) return
+  const chart = echarts.getInstanceByDom(dom) || echarts.init(dom)
+  chart.setOption({
+    series: [{
+      type: 'tree',
+      data: [{
+        name: '质量波动',
+        children: [
+          { name: '人-技能不足', children: [{ name: '培训缺失' }] },
+          { name: '机-振动失准', children: [{ name: '轴承磨损' }] },
+          { name: '法-参数偏差', children: [{ name: '进给过快' }] },
+          { name: '环-温漂影响', children: [{ name: '环境过热' }] }
+        ]
+      }],
+      orient: 'LR',
+      symbolSize: 8,
+      initialTreeDepth: 2,
+      label: { position: 'left', fontSize: 10 },
+      leaves: { label: { position: 'right' } }
+    }]
+  })
+  requestAnimationFrame(() => chart.resize())
+}
+
+// 03. Run Chart Report
+const initRunChartReport = () => {
+  const dom = document.getElementById('runChartReport')
+  if (!dom) return
+  const chart = echarts.getInstanceByDom(dom) || echarts.init(dom)
+  chart.setOption({
+    grid: { top: '15%', bottom: '15%', left: '10%', right: '5%' },
+    xAxis: { type: 'category', data: ['08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00'] },
+    yAxis: { type: 'value', min: 80, max: 100, name: '良率 %' },
+    series: [
+      { 
+        data: [92, 94, 88, 85, 89, 93, 97], 
+        type: 'line', 
+        smooth: true, 
+        lineStyle: { color: '#1e3a8a', width: 2.5 }, 
+        itemStyle: { color: '#1e3a8a' },
+        symbol: 'circle',
+        symbolSize: 8,
+        markLine: {
+          symbol: 'none',
+          data: [{ yAxis: 91.5, lineStyle: { color: '#000', type: 'solid', width: 1.5 }, label: { show: true, position: 'end', formatter: 'Mean' } }]
+        }
+      }
+    ]
+  })
+  requestAnimationFrame(() => chart.resize())
+}
+
+// 04. Control Chart Report
+const initControlChartReport = () => {
+  const dom = document.getElementById('controlChartReport')
+  if (!dom) return
+  const chart = echarts.getInstanceByDom(dom) || echarts.init(dom)
+  chart.setOption({
+    grid: { top: '15%', bottom: '15%', left: '10%', right: '5%' },
+    xAxis: { type: 'category', data: ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'P10'] },
+    yAxis: { type: 'value', min: 14.5, max: 15.5 },
     series: [
       {
-        data: [14.8, 15.0, 15.2, 14.7, 15.1, 15.4, 14.9, 15.0],
+        data: [14.9, 15.1, 15.3, 14.8, 15.2, 15.5, 14.7, 14.9, 15.0, 15.2],
         type: 'line',
-        smooth: true,
+        lineStyle: { color: '#0f172a' },
+        itemStyle: { color: params => params.data > 15.4 || params.data < 14.7 ? '#ef4444' : '#0f172a' },
         markLine: {
           data: [
-            { yAxis: 15.5, lineStyle: { color: '#ef4444' } },
-            { yAxis: 14.85, lineStyle: { color: '#10b981' } },
-            { yAxis: 14.2, lineStyle: { color: '#ef4444' } }
+            { yAxis: 15.4, label: { formatter: 'UCL' }, lineStyle: { color: '#ef4444', type: 'dashed' } },
+            { yAxis: 15.0, label: { formatter: 'CL' }, lineStyle: { color: '#64748b' } },
+            { yAxis: 14.6, label: { formatter: 'LCL' }, lineStyle: { color: '#ef4444', type: 'dashed' } }
           ]
         }
       }
     ]
   })
+  requestAnimationFrame(() => chart.resize())
 }
 
-const initRunChart = () => {
-  const dom = document.getElementById('runChart')
+// 05. Comparison Chart Report
+const initComparisonChartReport = () => {
+  const dom = document.getElementById('comparisonChartReport')
   if (!dom) return
-  const chart = echarts.init(dom)
+  const chart = echarts.getInstanceByDom(dom) || echarts.init(dom)
   chart.setOption({
-    xAxis: { type: 'category', data: ['W1', 'W2', 'W3', 'W4', 'W5', 'W6'] },
-    yAxis: { type: 'value', name: '合格率' },
-    series: [{ data: [88, 90, 89, 94, 96, 98.4], type: 'line', smooth: true, areaStyle: { opacity: 0.2 } }]
+    legend: { bottom: '0%' },
+    grid: { top: '15%', bottom: '20%', left: '10%', right: '5%' },
+    xAxis: { type: 'category', data: ['尺寸一致性', '表面光洁度', '综合良率', '加工效率'] },
+    yAxis: { type: 'value', max: 100 },
+    series: [
+      { name: '改善前', type: 'bar', data: [75, 82, 89, 78], itemStyle: { color: '#94a3b8' } },
+      { name: '改善后', type: 'bar', data: [94, 96, 98, 92], itemStyle: { color: '#1e293b' } }
+    ]
   })
+  requestAnimationFrame(() => chart.resize())
 }
 
-const initFishboneChart = () => {
-  const dom = document.getElementById('fishboneChart')
+// 06. Waterfall Chart Report
+const initWaterfallChartReport = () => {
+  const dom = document.getElementById('waterfallChartReport')
   if (!dom) return
-  const chart = echarts.init(dom)
+  const chart = echarts.getInstanceByDom(dom) || echarts.init(dom)
   chart.setOption({
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    grid: { top: '15%', bottom: '15%', left: '10%', right: '5%' },
+    xAxis: { type: 'category', splitLine: { show: false }, data: ['初始值', '振动态势', '温漂抵消', '工艺对齐', '最终值'] },
+    yAxis: { type: 'value' },
+    series: [
+      {
+        name: 'Placeholder',
+        type: 'bar',
+        stack: 'Total',
+        itemStyle: { borderColor: 'transparent', color: 'transparent' },
+        emphasis: { itemStyle: { borderColor: 'transparent', color: 'transparent' } },
+        data: [0, 89, 93, 97, 0]
+      },
+      {
+        name: '变化量',
+        type: 'bar',
+        stack: 'Total',
+        label: { show: true, position: 'top' },
+        data: [89, 4, 4, 1, 98],
+        itemStyle: { color: params => params.dataIndex === 0 || params.dataIndex === 4 ? '#0f172a' : '#22c55e' }
+      }
+    ]
+  })
+  requestAnimationFrame(() => chart.resize())
+}
+
+// 07. Radar Chart Report
+const initRadarChartReport = () => {
+  const dom = document.getElementById('radarChartReport')
+  if (!dom) return
+  const chart = echarts.getInstanceByDom(dom) || echarts.init(dom)
+  chart.setOption({
+    radar: {
+      indicator: [
+        { name: '设备自动化', max: 100 },
+        { name: '参数受控度', max: 100 },
+        { name: '人员执规范', max: 100 },
+        { name: '环境抗扰度', max: 100 },
+        { name: '测量精准度', max: 100 }
+      ],
+      shape: 'circle',
+      splitArea: { areaStyle: { color: ['rgba(15, 23, 42, 0.05)', 'rgba(15, 23, 42, 0.1)'] } }
+    },
     series: [{
-      type: 'tree',
-      data: [{
-        name: '工艺缺陷',
-        children: [
-          { name: '人', children: [{ name: '培训不足' }] },
-          { name: '机', children: [{ name: '振动异常' }] },
-          { name: '法', children: [{ name: '进给异常' }] }
-        ]
-      }],
-      symbolSize: 10, label: { position: 'left', fontSize: 11 },
-      leaves: { label: { position: 'right' } }
+      type: 'radar',
+      data: [{ value: [85, 92, 70, 88, 95], name: '质量画像', areaStyle: { color: 'rgba(15, 23, 42, 0.3)' }, lineStyle: { color: '#0f172a' }, itemStyle: { color: '#0f172a' } }]
     }]
   })
-}
-
-const initNetworkChart = () => {
-  const dom = document.getElementById('networkChart')
-  if (!dom) return
-  const chart = echarts.init(dom)
-  chart.setOption({
-    series: [{
-      type: 'graph',
-      layout: 'force',
-      data: [{ name: '设备' }, { name: '参数' }, { name: '质量' }, { name: '反馈' }],
-      links: [{ source: '设备', target: '参数' }, { source: '参数', target: '质量' }, { source: '质量', target: '反馈' }],
-      force: { repulsion: 200 }, label: { show: true }
-    }]
-  })
+  requestAnimationFrame(() => chart.resize())
 }
 
 watch(activeRole, () => {
-  nextTick(() => initDashboardCharts())
+  initDashboardCharts()
 })
 
+
 const filter = ref({
+  role: 'process_manager',
   device: '3号精密磨床',
   timeRange: '7d',
-  operator: ''
+  operator: '',
+  improvementTarget: '',
+  focusPoints: ['mean_diff', 'process_capability']
 })
 
 const uploadedData = ref([])
 const totalRecords = ref(0)
 const filePaths = ref([])
-const fileList = ref([])
-const uploadWarning = ref('')
-const diagnosisResult = ref(null)
-const solutions = ref([])
+
+const goToStep = (step) => {
+  if (scanInterval) {
+    clearInterval(scanInterval)
+    scanInterval = null
+  }
+  isAutoMode.value = false
+  currentStep.value = step
+}
+
+let resizeTimer = null
+const handleResize = () => {
+  if (resizeTimer) {
+    clearTimeout(resizeTimer)
+  }
+  
+  resizeTimer = setTimeout(() => {
+    const charts = document.querySelectorAll('.report-chart-box, .chart-container, .chart-container-sm')
+    charts.forEach(el => {
+      const inst = echarts.getInstanceByDom(el)
+      if (inst) {
+        requestAnimationFrame(() => inst.resize())
+      }
+    })
+    
+    requestAnimationFrame(() => {
+      if (chartInstances.run) chartInstances.run.resize()
+      if (chartInstances.s) chartInstances.s.resize()
+      if (chartInstances.control) chartInstances.control.resize()
+      if (chartInstances.control2) chartInstances.control2.resize()
+      if (chartInstances.pareto) chartInstances.pareto.resize()
+    })
+    
+    resizeTimer = null
+  }, 100)
+}
+
+onMounted(() => {
+  window.addEventListener('resize', handleResize)
+  
+  // Suppress ResizeObserver loop limit exceeded error
+  window.addEventListener('error', e => {
+    if (e.message === 'ResizeObserver loop completed with undelivered notifications.' || e.message === 'ResizeObserver loop limit exceeded') {
+      e.stopImmediatePropagation()
+    }
+  })
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+  // Clean up chart instances
+  if (chartInstances.run) chartInstances.run.destroy()
+  if (chartInstances.s) chartInstances.s.destroy()
+  if (chartInstances.control) chartInstances.control.destroy()
+  if (chartInstances.control2) chartInstances.control2.destroy()
+  if (chartInstances.pareto) chartInstances.pareto.destroy()
+  ecInstances.forEach(inst => {
+    if (typeof inst.dispose === 'function') inst.dispose()
+  })
+  ecInstances.clear()
+})
 
 const goBack = () => router.push('/')
 
@@ -788,6 +997,10 @@ const submitFeedback = () => {
 }
 
 const handleTtestFileChange = (file) => {
+  if (file.size > 50 * 1024 * 1024) {
+    ElMessage.error('单个文件不超过 50MB')
+    return false
+  }
   const mask = ElLoading.service({ text: '正在进行统计显著性计算...', background: 'rgba(255, 255, 255, 0.8)' })
   setTimeout(() => {
     ttestDataUploaded.value = true
@@ -797,42 +1010,10 @@ const handleTtestFileChange = (file) => {
   }, 1500)
 }
 
-const initDistributionChart = () => {
-  const chartDom = document.getElementById('distributionChart')
-  if (!chartDom) return
-  const myChart = echarts.init(chartDom)
-  myChart.setOption({
-    title: { text: '异常特征分布对比', left: 'center', textStyle: { fontSize: 14 } },
-    tooltip: { trigger: 'axis' },
-    legend: { top: 'bottom', data: ['初始采样 (Before)', '生产验证 (After)'] },
-    xAxis: { type: 'category', data: ['0-5μm', '5-10μm', '10-15μm', '15-20μm', '>20μm'] },
-    yAxis: { type: 'value', name: '频次' },
-    series: [
-      {
-        name: '初始采样 (Before)',
-        type: 'line',
-        smooth: true,
-        data: [10, 45, 80, 55, 30],
-        lineStyle: { color: '#94a3b8', width: 2, type: 'dashed' },
-        symbol: 'none'
-      },
-      {
-        name: '生产验证 (After)',
-        type: 'line',
-        smooth: true,
-        data: [5, 15, 35, 20, 8],
-        lineStyle: { color: '#409eff', width: 3 },
-        areaStyle: { color: 'rgba(64, 158, 255, 0.2)' },
-        symbol: 'circle'
-      }
-    ]
-  })
-}
-
 const initVerificationCharts = () => {
   const chartDom = document.getElementById('verificationChart')
   if (!chartDom) return
-  const myChart = echarts.init(chartDom)
+  const myChart = echarts.getInstanceByDom(chartDom) || echarts.init(chartDom)
   myChart.setOption({
     tooltip: { trigger: 'axis' },
     legend: { data: ['改进前 (Before)', '改进后 (After)'] },
@@ -855,11 +1036,101 @@ const initVerificationCharts = () => {
       }
     ]
   })
+  requestAnimationFrame(() => myChart.resize())
 }
+
+const initDistributionChart = () => {
+  const chartDom = document.getElementById('distributionChart')
+  if (!chartDom) return
+  const myChart = echarts.getInstanceByDom(chartDom) || echarts.init(chartDom)
+  myChart.setOption({
+    title: { 
+      text: '异常特征分布对比', 
+      left: 'center', 
+      top: 10,
+      textStyle: { fontSize: 16, fontWeight: 700, color: '#1e293b' } 
+    },
+    tooltip: { 
+      trigger: 'axis',
+      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+      borderColor: '#e2e8f0',
+      borderWidth: 1,
+      textStyle: { color: '#475569' },
+      padding: [10, 15]
+    },
+    legend: { 
+      bottom: 20, 
+      left: 'center',
+      data: ['初始采样 (Before)', '生产验证 (After)'],
+      itemWidth: 14,
+      itemHeight: 14
+    },
+    grid: {
+      top: '20%',
+      left: '10%',
+      right: '8%',
+      bottom: '18%'
+    },
+    xAxis: { 
+      type: 'category', 
+      boundaryGap: false,
+      data: ['0-5μm', '5-10μm', '10-15μm', '15-20μm', '>20μm'],
+      axisLine: { lineStyle: { color: '#e2e8f0' } },
+      axisLabel: { color: '#64748b' }
+    },
+    yAxis: { 
+      type: 'value', 
+      name: '频次', 
+      max: 80,
+      axisLabel: { color: '#64748b' },
+      splitLine: { lineStyle: { color: '#f1f5f9', type: 'dashed' } }
+    },
+    series: [
+      {
+        name: '初始采样 (Before)',
+        type: 'line',
+        smooth: true,
+        data: [5, 30, 78, 55, 30],
+        lineStyle: { color: '#cbd5e1', width: 2, type: 'dashed' },
+        itemStyle: { color: '#cbd5e1' },
+        symbol: 'circle',
+        symbolSize: 6
+      },
+      {
+        name: '生产验证 (After)',
+        type: 'line',
+        smooth: true,
+        data: [5, 15, 35, 20, 8],
+        lineStyle: { color: '#3b82f6', width: 2.5 },
+        itemStyle: { color: '#3b82f6' },
+        areaStyle: { 
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: 'rgba(59, 130, 246, 0.25)' },
+            { offset: 1, color: 'rgba(59, 130, 246, 0.05)' }
+          ]) 
+        },
+        symbol: 'circle',
+        symbolSize: 8,
+        emphasis: {
+          scale: true,
+          itemStyle: { borderWidth: 2, borderColor: '#fff' }
+        }
+      }
+    ]
+  })
+  requestAnimationFrame(() => myChart.resize())
+}
+
+// Global Resize Handler - Handled in onMounted/onUnmounted
 
 const handleFileChange = async (uploadFile) => {
   const file = uploadFile.raw
-  if (!file) return
+
+  // Size verification
+  if (file.size > 50 * 1024 * 1024) {
+    ElMessage.error('单个文件不超过 50MB')
+    return false
+  }
 
   const formData = new FormData()
   formData.append('file', file)
@@ -869,65 +1140,87 @@ const handleFileChange = async (uploadFile) => {
       method: 'POST',
       body: formData
     })
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}))
+      // 上传失败：清空所有状态
+      uploadedData.value = []
+      totalRecords.value = 0
+      filePaths.value = []
+      ElMessage.error(`${file.name} 上传失败：${errData.detail || '请检查网络连接或后端服务'}`)
+      return
+    }
+
     const data = await res.json()
     if (data.code === 200) {
-      filePaths.value.push(data.data.file_path)
+      // 追加到已有数据（支持多文件）
       uploadedData.value = uploadedData.value.concat(data.data.records)
       totalRecords.value += data.data.total_records
+      filePaths.value.push(data.data.file_path)
+
       if (data.warning) {
-        uploadWarning.value = data.warning
         ElMessage.warning(data.warning)
       }
-      ElMessage.success(`${file.name} 解析成功`)
-      // Auto-expand config panel when files are uploaded
-      if (!activeConfigCollapse.value.includes('config')) {
-        activeConfigCollapse.value = ['config']
-      }
-    } else if (data.detail) {
-      // 上传失败：重置所有状态，保证数据一致性
-      uploadedData.value = []
-      totalRecords.value = 0
-      filePaths.value = []
-      uploadWarning.value = ''
-      fileList.value = []
-      ElMessage.error(`${file.name} 上传失败：${data.detail}，已清空列表，请重新上传`)
-    } else {
-      // 上传失败：重置所有状态
-      uploadedData.value = []
-      totalRecords.value = 0
-      filePaths.value = []
-      uploadWarning.value = ''
-      fileList.value = []
-      ElMessage.error(`${file.name} 上传失败，已清空列表，请重新上传`)
+      ElMessage.success(`${file.name} 解析成功，共 ${data.data.total_records} 条记录`)
+      nextTick(() => initSamplingCharts())
     }
   } catch (e) {
-    // 网络异常：重置所有状态
+    console.error('Upload process error:', e)
     uploadedData.value = []
     totalRecords.value = 0
     filePaths.value = []
-    uploadWarning.value = ''
-    fileList.value = []
-    ElMessage.error(`${file.name} 上传失败，请检查网络连接或后端服务，已清空列表`)
+    ElMessage.error(`${file.name} 上传失败，请检查网络连接或后端服务`)
   }
 }
 
 const handleFileRemove = (file) => {
+  // 删除文件时重置所有状态（多文件合并需要一致性）
   uploadedData.value = []
   totalRecords.value = 0
   filePaths.value = []
-  uploadWarning.value = ''
   ElMessage.info(`已删除 ${file.name}，请重新上传所有文件后再次诊断`)
 }
+
+// Watch currentStep to re-init charts when entering visualization steps
+watch(currentStep, (newStep) => {
+  if (newStep === 1) {
+    nextTick(() => {
+      setTimeout(() => {
+        initSamplingCharts()
+        initPortraitCharts()
+        requestAnimationFrame(() => {
+          ecInstances.forEach(inst => {
+            if (typeof inst.resize === 'function') inst.resize()
+          })
+        })
+      }, 100)
+    })
+  } else if (newStep === 3) {
+    nextTick(() => {
+      setTimeout(() => {
+        initPortraitCharts()
+        requestAnimationFrame(() => {
+          ecInstances.forEach(inst => {
+            if (typeof inst.resize === 'function') inst.resize()
+          })
+        })
+      }, 100)
+    })
+  }
+})
 
 const startAIScan = () => {
   if (uploadedData.value.length === 0) {
     ElMessage.warning('请先上传质量报表')
     return
   }
-  currentStep.value = 1
+  isAutoMode.value = true
+  currentStep.value = 99 // Show loading
   scanProgress.value = 0
   diagnosticLogs.value = []
-  
+
+  if (scanInterval) clearInterval(scanInterval)
+
   const processSteps = [
     '解构原始张量数据...',
     '对齐设备历史维护记录...',
@@ -935,9 +1228,9 @@ const startAIScan = () => {
     '捕获微米级尺寸波动关联项...',
     '诊断链路构建完成。'
   ]
-  
+
   let stepIdx = 0
-  const interval = setInterval(() => {
+  scanInterval = setInterval(() => {
     if (scanProgress.value < 100) {
       scanProgress.value += 4
       if (scanProgress.value % 20 === 0 && stepIdx < processSteps.length) {
@@ -948,13 +1241,24 @@ const startAIScan = () => {
         stepIdx++
       }
     } else {
-      clearInterval(interval)
-      fetchDiagnosisResult()
+      clearInterval(scanInterval)
+      scanInterval = null
+      // Auto transition to Visualization first
+      currentStep.value = 1
+      nextTick(() => {
+        initSamplingCharts()
+        initPortraitCharts()
+      })
+      // Background: fetch real diagnosis and solutions
+      fetchDiagnosisResultBackground()
+      setTimeout(() => {
+        handleGenerateSolutions()
+      }, 1500)
     }
-  }, 100)
+  }, 50)
 }
 
-const fetchDiagnosisResult = async () => {
+const fetchDiagnosisResultBackground = async () => {
   try {
     const res = await fetch('/api/diagnosis/analyze', {
       method: 'POST',
@@ -964,101 +1268,30 @@ const fetchDiagnosisResult = async () => {
         equipment: filter.value.device || '3号精密磨床',
         days: filter.value.timeRange === '24h' ? 1 : 7,
         operator: filter.value.operator || null,
-        material: null,
-        environment: null,
-        focus_metrics: diagnosisConfig.value.focusMetrics,
-        analysis_goal: diagnosisConfig.value.analysisGoal,
-        depth: diagnosisConfig.value.depth,
-        time_range: filter.value.timeRange,
+        focus_metrics: filter.value.focusPoints || [],
+        analysis_goal: 'comprehensive_diagnosis',
+        depth: 3,
+        time_range: filter.value.timeRange || '7d',
       }),
     })
+    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`)
     const data = await res.json()
     if (data.code === 200) {
-      diagnosisResult.value = data.data
-      currentStep.value = 2
-      nextTick(() => initTrendChart())
+      diagnosisResult.value = markRaw(data.data)
     }
   } catch (e) {
-    ElMessage.error('诊断异常')
-    currentStep.value = 0
+    console.error('Diagnosis background fetch error:', e)
   }
 }
 
-const initTrendChart = () => {
-  const chartDom = document.getElementById('trendChart')
-  if (!chartDom) return
-  const myChart = echarts.init(chartDom)
-  const option = {
-    tooltip: { trigger: 'axis' },
-    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-    xAxis: { 
-      type: 'category', 
-      data: diagnosisResult.value.quality_trend.dates,
-      axisLine: { lineStyle: { color: '#E4E7ED' } }
-    },
-    yAxis: { 
-      type: 'value', 
-      min: 80, 
-      max: 100,
-      splitLine: { lineStyle: { type: 'dashed' } }
-    },
-    series: [{
-      data: diagnosisResult.value.quality_trend.rates,
-      type: 'line',
-      smooth: true,
-      symbol: 'circle',
-      symbolSize: 8,
-      itemStyle: { color: '#409eff' },
-      areaStyle: {
-        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-          { offset: 0, color: 'rgba(64, 158, 255, 0.3)' },
-          { offset: 1, color: 'rgba(64, 158, 255, 0)' }
-        ])
-      }
-    }]
-  }
-  myChart.setOption(option)
-}
+// ecInstances is now in the outer script block
 
 const initPortraitCharts = () => {
-  // Radar Chart
-  const radarDom = document.getElementById('radarChart')
-  if (radarDom) {
-    const radarChart = echarts.init(radarDom)
-    radarChart.setOption({
-      radar: {
-        indicator: [
-          { name: '人员 (Man)', max: 100 },
-          { name: '机器 (Machine)', max: 100 },
-          { name: '材料 (Material)', max: 100 },
-          { name: '方法 (Method)', max: 100 },
-          { name: '环境 (Env)', max: 100 },
-          { name: '测量 (Measure)', max: 100 }
-        ],
-        splitNumber: 4,
-        axisLine: { lineStyle: { color: 'rgba(64,158,255, 0.2)' } },
-        splitLine: { lineStyle: { color: 'rgba(64,158,255, 0.2)' } },
-        splitArea: { areaStyle: { color: ['rgba(255,255,255,1)', 'rgba(235,245,255,0.3)'] } }
-      },
-      series: [{
-        type: 'radar',
-        data: [
-          {
-            value: [85, 45, 90, 60, 75, 80], // Mock portrait values based on diagnosis
-            name: '当前质量态势',
-            areaStyle: { color: 'rgba(64, 158, 255, 0.4)' },
-            lineStyle: { color: '#409eff', width: 2 },
-            itemStyle: { color: '#409eff' }
-          }
-        ]
-      }]
-    })
-  }
-
-  // Predictor Chart (Bar/Line combination)
+  // Predictor Chart
   const predictorDom = document.getElementById('predictorChart')
   if (predictorDom) {
-    const predictorChart = echarts.init(predictorDom)
+    const predictorChart = echarts.getInstanceByDom(predictorDom) || echarts.init(predictorDom)
+    ecInstances.add(predictorChart)
     predictorChart.setOption({
       tooltip: { trigger: 'axis' },
       xAxis: { type: 'category', data: ['W1', 'W2', 'W3', 'W4'] },
@@ -1085,24 +1318,38 @@ const initPortraitCharts = () => {
         }
       ]
     })
+    requestAnimationFrame(() => predictorChart.resize())
   }
 }
 
 const handleGenerateSolutions = async () => {
   const mask = ElLoading.service({ text: '正在规划最佳改进路径...', background: 'rgba(255, 255, 255, 0.8)' })
   try {
+    // 先确保诊断结果已获取
+    if (!diagnosisResult.value || !diagnosisResult.value.root_causes) {
+      await fetchDiagnosisResultBackground()
+    }
+
+    const rootCauses = diagnosisResult.value?.root_causes || []
     const res = await fetch('/api/solution/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        root_causes: diagnosisResult.value.root_causes,
+        root_causes: rootCauses,
         equipment: filter.value.device || null,
       }),
     })
+    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`)
     const data = await res.json()
-    solutions.value = data.data.solutions
-    currentStep.value = 3
-    nextTick(() => initPortraitCharts())
+    if (data.code === 200) {
+      solutions.value = markRaw(data.data.solutions)
+      if (isAutoMode.value) {
+        currentStep.value = 3
+        nextTick(() => initPortraitCharts())
+      }
+    }
+  } catch (e) {
+    ElMessage.error('方案生成失败: ' + e.message)
   } finally {
     mask.close()
   }
@@ -1182,23 +1429,71 @@ const reset = () => {
 }
 
 .steps-wrapper {
-  padding: 32px;
-  margin-bottom: 32px;
+  padding: 24px 32px;
+  margin-bottom: 24px;
 }
+
+.filter-card {
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+  border: 1px solid #e2e8f0;
+}
+
+.py-12 { padding-top: 12px; padding-bottom: 12px; }
+
+.mt-32 { margin-top: 32px; }
+
+.target-input-area :deep(.el-textarea__inner) {
+  background: #f8fafc;
+  border-radius: 6px;
+  padding: 12px;
+}
+
 
 .custom-steps {
   max-width: 1000px;
   margin: 0 auto;
 }
 
-/* Upload Card Styles */
-.upload-card {
-  max-width: 1000px;
-  margin: 0 auto;
+/* Simplified Upload In Sampling */
+.simplified-upload :deep(.el-upload-dragger) {
+  height: 120px;
+  background-color: #f0f7ff;
 }
 
-.upload-area {
-  margin-bottom: 32px;
+.upload-icon-small {
+  font-size: 32px;
+  color: var(--primary);
+  margin-bottom: 8px;
+}
+
+.micro-table {
+  border-radius: 4px;
+}
+
+
+
+.action-footer-sampling {
+  text-align: right;
+}
+
+.btn-primary-rect {
+  padding: 12px 48px;
+  border-radius: 4px;
+  font-weight: 700;
+}
+
+.mb-24 { margin-bottom: 24px; }
+.py-16 { padding-top: 16px; padding-bottom: 16px; }
+
+/* Data Visualization Stage Styles */
+.dashboard-visual {
+  background: #fff;
+  padding: 10px;
+}
+
+/* Prediction ROI Card */
+.roi-card {
+  padding: 0;
 }
 
 :deep(.el-upload-dragger) {
@@ -1255,6 +1550,36 @@ const reset = () => {
   border-radius: 8px;
 }
 
+.raw-text-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.raw-text-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px;
+  background: #f8fafc;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #64748b;
+  max-height: 80px;
+  overflow: hidden;
+}
+
+.raw-text-content {
+  flex: 1;
+  line-height: 1.5;
+  word-break: break-all;
+}
+
+.raw-text-hint {
+  text-align: center;
+  margin-top: 8px;
+}
+
 .status-tag {
   font-size: 12px;
   padding: 2px 8px;
@@ -1263,12 +1588,9 @@ const reset = () => {
 .status-tag.success { background: #f0f9eb; color: #67c23a; }
 .status-tag.danger { background: #fef0f0; color: #f56c6c; }
 
-.warning-banner-box {
-  margin-bottom: 24px;
-}
-
 .filter-panel {
   display: flex;
+  flex-wrap: wrap;
   gap: 24px;
   padding: 20px;
   background-color: #f8fafc;
@@ -1278,9 +1600,14 @@ const reset = () => {
 
 .filter-item {
   flex: 1;
+  min-width: 200px;
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.filter-item.full-width {
+  flex: 0 0 100%;
 }
 
 .filter-label {
@@ -1353,9 +1680,66 @@ const reset = () => {
 /* Results Display */
 .grid-layout {
   display: grid;
-  grid-template-columns: 1fr 1.2fr;
+  grid-template-columns: 1fr 1fr;
   gap: 24px;
 }
+
+.full-row {
+  grid-column: 1 / -1;
+}
+
+.clickable-step {
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.clickable-step:hover :deep(.el-step__title) {
+  color: var(--primary);
+}
+
+.clickable-step:hover :deep(.el-step__icon) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.xbar-s-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.panel-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #475569;
+  margin-bottom: 8px;
+  padding-left: 4px;
+  border-left: 3px solid var(--primary);
+}
+
+.canvas-wrapper-sm {
+  height: 200px;
+  width: 100%;
+  position: relative;
+}
+
+.ml-auto {
+  margin-left: auto;
+}
+
+.ml-16 {
+  margin-left: 16px;
+}
+
+.auto-planning-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #3b82f6;
+  font-weight: 500;
+  font-size: 14px;
+}
+
 
 .chart-container {
   height: 380px;
@@ -1363,6 +1747,18 @@ const reset = () => {
 
 .chart-container-sm {
   height: 280px;
+}
+
+.canvas-wrapper {
+  height: 260px;
+  width: 100%;
+  position: relative;
+}
+
+.canvas-wrapper-lg {
+  height: 320px;
+  width: 100%;
+  position: relative;
 }
 
 .header-tag {
@@ -1478,402 +1874,262 @@ const reset = () => {
   gap: 20px;
 }
 
-.decision-label {
-  font-size: 16px;
-  font-weight: 600;
-  color: #1e293b;
+@media (max-width: 1024px) {
+  .dashboard-grid-conclusion, .sampling-charts-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
-.decision-btns {
-  display: flex;
-  gap: 16px;
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out forwards;
 }
 
-/* T-test Styles */
-.ttest-card {
-  max-width: 1100px;
-  margin: 0 auto;
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-.ttest-layout {
-  display: flex;
-  flex-direction: column;
-  gap: 32px;
-}
-
-.ttest-upload-section {
-  padding: 40px;
-  border: 2px dashed #e2e8f0;
-  border-radius: 16px;
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-}
-
-.upload-title {
-  font-size: 18px;
-  font-weight: 700;
-  color: #334155;
-}
-
-/* Dashboard & SOP Mode Styles */
-.dashboard-mode {
-  width: 100%;
-}
-
-.role-selector {
-  margin-bottom: 24px;
-  padding: 16px 24px;
-  display: flex;
-  align-items: center;
-  gap: 20px;
+.stats-summary-card {
   background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05);
 }
 
-.selector-label {
-  font-weight: 700;
-  color: #475569;
+.card-title-sm {
   font-size: 14px;
+  font-weight: 700;
+  color: #1e293b;
 }
 
-.dashboard-grid {
-  display: grid;
-  grid-template-columns: 380px 1fr;
-  gap: 24px;
-  align-items: start;
+.text-danger-custom { color: #ef4444; }
+.text-primary-custom { color: #3b82f6; }
+.font-bold { font-weight: 700; }
+
+.stats-summary-table :deep(.el-table__header) th {
+  background-color: #f8fafc !important;
+  color: #475569;
+  font-weight: 800;
 }
 
-/* SOP Document Styling */
-.sop-document {
-  position: sticky;
-  top: 20px;
-  height: calc(100vh - 300px);
+/* Quality Report Styles */
+.report-list-card {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05);
+}
+
+.report-document-container {
+  position: relative;
+  height: 320px;
+  overflow: hidden;
+  cursor: pointer;
+  background: #f8fafc;
+  display: flex;
+  justify-content: center;
+  padding-top: 24px;
+}
+
+.report-doc-mock {
+  width: 600px;
+  background: white;
+  min-height: 800px;
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+  padding: 40px;
+}
+
+.doc-red-border {
+  border: 4px solid #ef4444;
+  height: 100%;
+  padding: 30px;
+  position: relative;
+}
+
+.doc-header-info {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 80px;
+}
+
+.info-row {
+  display: flex;
+  align-items: flex-end;
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: #000;
+  font-family: "Times New Roman", serif;
+}
+
+.info-row .label {
+  font-weight: bold;
+}
+
+.underline-red {
+  border-bottom: 1px solid #ef4444;
+  min-width: 100px;
+  display: inline-block;
+  height: 20px;
+  padding-left: 10px;
+  margin-left: 4px;
+  font-weight: bold;
+}
+
+.doc-content-body {
+  text-align: center;
+  font-family: serif;
+  color: #000;
+}
+
+.doc-series {
+  font-size: 24px;
+  border-bottom: 2px solid #000;
+  display: inline-block;
+  margin-bottom: 24px;
+  padding: 0 20px;
+}
+
+.doc-model {
+  font-size: 28px;
+  font-weight: bold;
+  margin-bottom: 16px;
+}
+
+.doc-title {
+  font-size: 36px;
+  font-weight: bold;
+}
+
+.fade-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 180px;
+  background: linear-gradient(to bottom, transparent, rgba(248, 250, 252, 0.9) 60%, #f8fafc);
+  pointer-events: none;
+}
+
+.view-more-btn-box {
+  position: absolute;
+  bottom: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+}
+
+.report-preview-grid {
   display: flex;
   flex-direction: column;
-}
-
-.scrollable-content {
-  overflow-y: auto;
-  flex: 1;
-}
-
-.sop-content {
-  padding: 16px 4px;
-}
-
-.sop-section {
-  margin-bottom: 24px;
-}
-
-.sop-title {
-  font-size: 15px;
-  font-weight: 800;
-  color: #1e293b;
-  border-left: 4px solid var(--primary);
-  padding-left: 10px;
-  margin-bottom: 12px;
-}
-
-.sop-section p {
-  font-size: 13px;
-  color: #475569;
-  line-height: 1.6;
-}
-
-.sop-mini-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12px;
-  margin-top: 8px;
-}
-
-.sop-mini-table th, .sop-mini-table td {
-  border: 1px solid #e2e8f0;
-  padding: 8px;
-  text-align: left;
-}
-
-.sop-mini-table th {
-  background: #f8fafc;
-  color: #64748b;
-}
-
-/* Report View & Role Specifics */
-.report-view {
-  min-width: 0;
-}
-
-.report-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-
-.stat-main {
-  display: flex;
-  align-items: center;
   gap: 12px;
 }
 
-.stat-main .label {
-  font-size: 12px;
-  color: #64748b;
+.report-item-mini {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  background: #f8fafc;
+  border: 1px solid #f1f5f9;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.report-item-mini:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.report-icon-box {
+  width: 40px;
+  height: 40px;
+  background: #eff6ff;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 16px;
+}
+
+.report-icon-lg {
+  font-size: 20px;
+  color: #3b82f6;
+}
+
+.report-info-main {
   flex: 1;
 }
 
-.stat-main .value {
-  font-size: 20px;
-  font-weight: 800;
+.report-name-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.report-name-text {
+  font-size: 14px;
+  font-weight: 600;
   color: #1e293b;
 }
 
-.chart-card-lg {
-  background: white;
+.status-pill {
+  font-size: 11px;
+  padding: 1px 8px;
   border-radius: 12px;
-  border: 1px solid var(--border-light);
+  font-weight: 600;
 }
 
-/* Metric Cards in T-test */
-.metric-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 16px;
-  margin-top: 16px;
-}
+.status-pill.success { background: #dcfce7; color: #166534; }
+.status-pill.warning { background: #fef9c3; color: #854d0e; }
+.status-pill.danger { background: #fee2e2; color: #991b1b; }
 
-.metric-card {
-  padding: 16px;
-  background: #f8fafc;
-  border-radius: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  border: 1px solid #f1f5f9;
-}
-
-/* Responsive Dashboard Queries */
-@media (max-width: 1024px) {
-  .dashboard-grid {
-    grid-template-columns: 1fr;
-  }
-  .sop-document {
-    position: static;
-    height: auto;
-  }
-}
-
-@media (max-width: 640px) {
-  .report-row {
-    grid-template-columns: 1fr;
-  }
-  .role-selector {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-}
-
-.animate-fade-in {
-  animation: fadeIn 0.3s ease-out forwards;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-
-.mini-upload {
-  width: 100%;
-  max-width: 400px;
-}
-
-.validation-status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  color: #10b981;
-  background: #f0fdf4;
-  padding: 8px 16px;
-  border-radius: 20px;
-}
-
-.ttest-results-section {
-  border-top: 1px solid #f1f5f9;
-  padding-top: 32px;
-}
-
-.metric-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 16px;
-  margin-top: 16px;
-}
-
-.metric-card {
-  padding: 16px;
-  background: #f8fafc;
-  border-radius: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  border: 1px solid #f1f5f9;
-}
-
-.metric-card .label { font-size: 12px; color: #64748b; font-weight: 600; }
-.metric-card .value { font-size: 20px; font-weight: 800; }
-.metric-card .hint { font-size: 11px; color: #94a3b8; }
-.text-dark { color: #1e293b; }
-
-/* Attribution Analysis Styles */
-.attribution-card {
-  height: 100%;
-}
-
-.attribution-content {
-  padding: 8px;
-}
-
-.summary-stat {
-  display: flex;
-  gap: 24px;
-  margin-bottom: 32px;
-  background: #f8fafc;
-  padding: 20px;
-  border-radius: 12px;
-}
-
-.stat-item {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.stat-item .label {
+.report-meta-text {
   font-size: 12px;
   color: #64748b;
-}
-
-.stat-item .value {
-  font-size: 24px;
-  font-weight: 800;
-}
-
-.text-success { color: #10b981; }
-.text-primary { color: #3b82f6; }
-
-.sub-title {
-  font-size: 14px;
-  font-weight: 700;
-  color: #1e293b;
-  margin-bottom: 16px;
   display: flex;
   align-items: center;
-  gap: 8px;
 }
 
-.logic-desc {
-  font-size: 13px;
-  color: #475569;
-  line-height: 1.6;
-  margin: 4px 0 0;
+.mx-8 { margin-left: 8px; margin-right: 8px; }
+
+.anim-slide-up {
+  animation: slideUp 0.5s ease-out forwards;
 }
 
-.animate-fade-in {
-  animation: fadeIn 0.3s ease-out forwards;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Config Panel Styles */
-.config-collapse {
-  margin-bottom: 24px;
-  border: 1px solid var(--border-light);
-  border-radius: 8px;
-  background: #fff;
-}
-
-:deep(.config-collapse .el-collapse-item__header) {
-  font-weight: 600;
-  font-size: 15px;
-  padding: 0 20px;
-  background: #f8fafc;
-}
-
-.config-panel {
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.config-section {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.config-section-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #606266;
-}
-
-.slider-row {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.slider-value {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--primary);
-  min-width: 24px;
-  text-align: center;
-}
-
-/* Charts & Statistics Section Styles */
-.mb-16 { margin-bottom: 16px; }
-
-.charts-section {
-  background: #fff;
+:deep(.reports-dialog) {
   border-radius: 12px;
-  border: 1px solid var(--border-light);
 }
 
-.charts-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 16px;
+:deep(.reports-dialog .el-dialog__header) {
+  padding: 24px;
+  margin-right: 0;
+  border-bottom: 1px solid #e2e8f0;
 }
 
-.chart-image-wrapper {
+:deep(.reports-dialog .el-dialog__body) {
+  padding: 24px;
+}
+
+.dialog-filter-bar {
   display: flex;
-  justify-content: center;
-  align-items: center;
-  background: #f8fafc;
-  border-radius: 8px;
-  padding: 12px;
-  overflow: hidden;
+  justify-content: flex-end;
 }
 
-.chart-image {
-  max-width: 100%;
-  max-height: 300px;
-  object-fit: contain;
-  border-radius: 4px;
-}
-
-.statistics-section {
-  background: #fff;
-  border-radius: 12px;
-  border: 1px solid var(--border-light);
+:deep(.full-page-dialog) {
+  .el-dialog__header {
+    display: none;
+  }
+  .el-dialog__body {
+    padding: 0;
+    height: 100vh;
+  }
 }
 </style>
 
