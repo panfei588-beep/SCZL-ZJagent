@@ -24,6 +24,12 @@ xlrd==2.0.1
 numpy<2
 opencv-python==4.11.0.86
 
+# LangGraph
+langgraph>=0.2.0
+
+# Chart Generation
+matplotlib>=3.9.0
+
 # Database
 sqlalchemy==2.0.36
 asyncpg==0.30.0

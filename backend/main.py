@@ -1,5 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+import os
 
 from api.upload import router as upload_router
 from api.diagnosis import router as diagnosis_router
@@ -25,6 +27,11 @@ app.add_middleware(
 app.include_router(upload_router, prefix="/api/upload", tags=["文件上传"])
 app.include_router(diagnosis_router, prefix="/api/diagnosis", tags=["AI诊断"])
 app.include_router(solution_router, prefix="/api/solution", tags=["改进方案"])
+
+# 静态文件服务（图表图片）
+charts_dir = os.path.join(os.path.dirname(__file__), "charts")
+os.makedirs(charts_dir, exist_ok=True)
+app.mount("/api/static/charts", StaticFiles(directory=charts_dir), name="charts")
 
 
 @app.get("/api/health")

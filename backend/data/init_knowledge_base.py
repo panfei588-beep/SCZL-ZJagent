@@ -1,6 +1,6 @@
 """
-初始化 Milvus 知识库
-将预置的质量案例数据导入向量数据库
+初始化双知识库
+将预置的质量案例数据拆分为诊断知识库和改善知识库
 """
 
 import json
@@ -9,7 +9,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from knowledge_base.milvus_client import build_knowledge_base
+from knowledge_base.milvus_client import build_diagnosis_kb, build_improvement_kb
 
 
 def init_knowledge_base():
@@ -21,8 +21,14 @@ def init_knowledge_base():
         cases = json.load(f)
 
     print(f"加载了 {len(cases)} 条质量案例")
-    count = build_knowledge_base(cases)
-    print(f"成功导入 {count} 条案例到 Milvus 知识库")
+
+    d_count = build_diagnosis_kb(cases)
+    print(f"诊断知识库(diagnosis_cases): 导入 {d_count} 条案例")
+
+    i_count = build_improvement_kb(cases)
+    print(f"改善知识库(improvement_cases): 导入 {i_count} 条案例")
+
+    print(f"知识库初始化完成，共 {d_count + i_count} 条文档")
 
 
 if __name__ == "__main__":

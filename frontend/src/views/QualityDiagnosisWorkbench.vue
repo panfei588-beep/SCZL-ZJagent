@@ -107,6 +107,39 @@
               </div>
             </div>
 
+            <!-- Diagnosis Config Panel -->
+            <el-collapse v-model="activeConfigCollapse" class="config-collapse" v-show="filePaths.length > 0">
+              <el-collapse-item title="诊断配置" name="config">
+                <div class="config-panel">
+                  <div class="config-section">
+                    <label class="config-section-title">关注指标</label>
+                    <el-checkbox-group v-model="diagnosisConfig.focusMetrics">
+                      <el-checkbox label="合格率" />
+                      <el-checkbox label="尺寸偏差" />
+                      <el-checkbox label="表面粗糙度" />
+                      <el-checkbox label="圆度" />
+                      <el-checkbox label="波纹度" />
+                    </el-checkbox-group>
+                  </div>
+                  <div class="config-section">
+                    <label class="config-section-title">分析目标</label>
+                    <el-radio-group v-model="diagnosisConfig.analysisGoal">
+                      <el-radio label="root_cause">根因定位</el-radio>
+                      <el-radio label="trend_prediction">趋势预测</el-radio>
+                      <el-radio label="comprehensive_diagnosis">全面诊断</el-radio>
+                    </el-radio-group>
+                  </div>
+                  <div class="config-section">
+                    <label class="config-section-title">诊断深度</label>
+                    <div class="slider-row">
+                      <el-slider v-model="diagnosisConfig.depth" :min="1" :max="5" :marks="{ 1: '浅层', 3: '标准', 5: '深层' }" show-stops />
+                      <span class="slider-value">{{ diagnosisConfig.depth }}</span>
+                    </div>
+                  </div>
+                </div>
+              </el-collapse-item>
+            </el-collapse>
+
             <div class="action-footer">
               <el-button type="primary" size="large" class="btn-glow" :loading="loading" @click="startAIScan">
                 开始智能化诊断
@@ -132,6 +165,47 @@
 
       <!-- Step 2: Result View -->
       <div v-if="currentStep === 2" class="step-container animate-fade-in">
+        <!-- Low Confidence Warning -->
+        <div v-if="diagnosisResult?.low_confidence_warning" class="mb-16">
+          <el-alert
+            title="本次诊断置信度较低，结果仅供参考"
+            type="warning"
+            show-icon
+            :closable="false"
+          />
+        </div>
+
+        <!-- Charts Section -->
+        <div v-if="diagnosisResult?.charts && diagnosisResult.charts.length > 0" class="charts-section mb-16 card">
+          <div class="card-header">
+            <span class="header-tag">可视化分析</span>
+            <h3 class="card-title">AI 诊断图表</h3>
+          </div>
+          <div class="card-body charts-grid">
+            <div v-for="(chart, idx) in diagnosisResult.charts" :key="idx" class="chart-image-wrapper">
+              <img :src="chart.startsWith('/') ? chart : `/api/static/charts/${chart}`" :alt="`诊断图表 ${idx + 1}`" class="chart-image" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Statistics Table -->
+        <div v-if="diagnosisResult?.statistics && diagnosisResult.statistics.length > 0" class="statistics-section mb-16 card">
+          <div class="card-header">
+            <span class="header-tag">数据概览</span>
+            <h3 class="card-title">关键统计指标</h3>
+          </div>
+          <div class="card-body">
+            <el-table :data="diagnosisResult.statistics" border stripe class="custom-table">
+              <el-table-column prop="metric" label="指标" width="120" />
+              <el-table-column prop="max" label="最大值" width="100" />
+              <el-table-column prop="min" label="最小值" width="100" />
+              <el-table-column prop="mean" label="均值" width="100" />
+              <el-table-column prop="std" label="标准差" width="100" />
+              <el-table-column prop="envelope" label="波动包络" />
+            </el-table>
+          </div>
+        </div>
+
         <div class="grid-layout">
           <!-- Left: Quality Trend -->
           <div class="card chart-card">
@@ -170,7 +244,7 @@
             </div>
           </div>
         </div>
-        
+
         <div class="action-footer mt-24">
           <el-button size="large" @click="currentStep = 0">重置诊断</el-button>
           <el-button type="primary" size="large" @click="handleGenerateSolutions">生成针对性改进方案</el-button>
@@ -568,6 +642,13 @@ const ttestDataUploaded = ref(false)
 const ttestData = ref([])
 const activeRole = ref('manager')
 
+const activeConfigCollapse = ref([])
+const diagnosisConfig = ref({
+  focusMetrics: [],
+  analysisGoal: 'root_cause',
+  depth: 3,
+})
+
 const goToSOP = () => {
   currentStep.value = 6
   nextTick(() => {
@@ -798,6 +879,10 @@ const handleFileChange = async (uploadFile) => {
         ElMessage.warning(data.warning)
       }
       ElMessage.success(`${file.name} 解析成功`)
+      // Auto-expand config panel when files are uploaded
+      if (!activeConfigCollapse.value.includes('config')) {
+        activeConfigCollapse.value = ['config']
+      }
     } else if (data.detail) {
       ElMessage.error(data.detail)
     } else {
@@ -861,6 +946,12 @@ const fetchDiagnosisResult = async () => {
         equipment: filter.value.device || '3号精密磨床',
         days: filter.value.timeRange === '24h' ? 1 : 7,
         operator: filter.value.operator || null,
+        material: null,
+        environment: null,
+        focus_metrics: diagnosisConfig.value.focusMetrics,
+        analysis_goal: diagnosisConfig.value.analysisGoal,
+        depth: diagnosisConfig.value.depth,
+        time_range: filter.value.timeRange,
       }),
     })
     const data = await res.json()
@@ -1679,6 +1770,92 @@ const reset = () => {
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* Config Panel Styles */
+.config-collapse {
+  margin-bottom: 24px;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  background: #fff;
+}
+
+:deep(.config-collapse .el-collapse-item__header) {
+  font-weight: 600;
+  font-size: 15px;
+  padding: 0 20px;
+  background: #f8fafc;
+}
+
+.config-panel {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.config-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.config-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #606266;
+}
+
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.slider-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--primary);
+  min-width: 24px;
+  text-align: center;
+}
+
+/* Charts & Statistics Section Styles */
+.mb-16 { margin-bottom: 16px; }
+
+.charts-section {
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid var(--border-light);
+}
+
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.chart-image-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 12px;
+  overflow: hidden;
+}
+
+.chart-image {
+  max-width: 100%;
+  max-height: 300px;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+.statistics-section {
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid var(--border-light);
 }
 </style>
 

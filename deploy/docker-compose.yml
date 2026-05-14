@@ -109,6 +109,7 @@ services:
       - MINERU_BACKEND=pipeline
     volumes:
       - uploads_data:/app/uploads
+      - charts_data:/app/charts
       - ../backend/data:/app/data:ro
     depends_on:
       milvus:
@@ -139,6 +140,7 @@ volumes:
   milvus_data:
   postgres_data:
   uploads_data:
+  charts_data:
 
 networks:
   app-network:
