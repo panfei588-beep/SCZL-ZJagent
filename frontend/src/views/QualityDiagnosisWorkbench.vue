@@ -916,11 +916,20 @@ const filter = ref({
 const uploadedData = ref([])
 const totalRecords = ref(0)
 const filePaths = ref([])
+// 记录文件名到路径的映射，用于删除时精准匹配
+const fileMap = ref([])
 
 const goToStep = (step) => {
   if (scanInterval) {
     clearInterval(scanInterval)
     scanInterval = null
+  }
+  // 返回数据采样页面时清空已上传数据（el-upload 文件列表已丢失，避免预览数据残留）
+  if (step === 0) {
+    uploadedData.value = []
+    totalRecords.value = 0
+    filePaths.value = []
+    fileMap.value = []
   }
   // 自动模式下点击步骤不中断自动流转
   if (!isAutoMode.value) {
@@ -1147,16 +1156,22 @@ const handleFileChange = async (uploadFile) => {
       uploadedData.value = []
       totalRecords.value = 0
       filePaths.value = []
+      fileMap.value = []
       ElMessage.error(`${file.name} 上传失败：${errData.detail || '请检查网络连接或后端服务'}`)
       return
     }
 
     const data = await res.json()
     if (data.code === 200) {
-      // 追加到已有数据（支持多文件）
-      uploadedData.value = uploadedData.value.concat(data.data.records)
+      // 给每条记录打上文件名标签，方便删除时按文件过滤
+      const tagged = data.data.records.map((r: Record<string, unknown>) => ({
+        ...r,
+        _fileName: file.name
+      }))
+      uploadedData.value = uploadedData.value.concat(tagged)
       totalRecords.value += data.data.total_records
       filePaths.value.push(data.data.file_path)
+      fileMap.value.push({ name: file.name, path: data.data.file_path })
 
       if (data.warning) {
         ElMessage.warning(data.warning)
@@ -1169,16 +1184,30 @@ const handleFileChange = async (uploadFile) => {
     uploadedData.value = []
     totalRecords.value = 0
     filePaths.value = []
+    fileMap.value = []
     ElMessage.error(`${file.name} 上传失败，请检查网络连接或后端服务`)
   }
 }
 
 const handleFileRemove = (file) => {
-  // 删除文件时重置所有状态（多文件合并需要一致性）
-  uploadedData.value = []
-  totalRecords.value = 0
-  filePaths.value = []
-  ElMessage.info(`已删除 ${file.name}，请重新上传所有文件后再次诊断`)
+  // 只删除被删除文件对应的记录，保留其他文件数据
+  const removedCount = uploadedData.value.filter((r: Record<string, unknown>) => r._fileName === file.name).length
+  uploadedData.value = uploadedData.value.filter((r: Record<string, unknown>) => r._fileName !== file.name)
+  totalRecords.value -= removedCount
+
+  // 从 fileMap 中找到对应的路径并移除
+  const mapIdx = fileMap.value.findIndex(m => m.name === file.name)
+  if (mapIdx !== -1) {
+    const entry = fileMap.value[mapIdx]
+    // 同步从 filePaths 中移除
+    const pathIdx = filePaths.value.indexOf(entry.path)
+    if (pathIdx !== -1) {
+      filePaths.value.splice(pathIdx, 1)
+    }
+    fileMap.value.splice(mapIdx, 1)
+  }
+
+  ElMessage.info(`已删除 ${file.name}，剩余 ${totalRecords.value} 条记录`)
 }
 
 // Watch currentStep to re-init charts when entering visualization steps
@@ -1435,6 +1464,9 @@ const exportReport = async () => {
 const reset = () => {
   currentStep.value = 0
   uploadedData.value = []
+  totalRecords.value = 0
+  filePaths.value = []
+  fileMap.value = []
   router.push('/')
 }
 </script>
