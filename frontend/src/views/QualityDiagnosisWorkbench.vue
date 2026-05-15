@@ -1219,7 +1219,7 @@ watch(currentStep, (newStep) => {
         initPortraitCharts()
         requestAnimationFrame(() => {
           ecInstances.forEach(inst => {
-            if (typeof inst.resize === 'function') inst.resize()
+            try { if (typeof inst.resize === 'function') inst.resize() } catch (_) {}
           })
         })
       }, 100)
@@ -1250,7 +1250,7 @@ watch(currentStep, (newStep) => {
         initPortraitCharts()
         requestAnimationFrame(() => {
           ecInstances.forEach(inst => {
-            if (typeof inst.resize === 'function') inst.resize()
+            try { if (typeof inst.resize === 'function') inst.resize() } catch (_) {}
           })
         })
       }, 100)
@@ -1343,7 +1343,12 @@ const initPortraitCharts = () => {
   // Predictor Chart
   const predictorDom = document.getElementById('predictorChart')
   if (predictorDom) {
-    const predictorChart = echarts.getInstanceByDom(predictorDom) || echarts.init(predictorDom)
+    const stale = echarts.getInstanceByDom(predictorDom)
+    if (stale) {
+      ecInstances.delete(stale)
+      stale.dispose()
+    }
+    const predictorChart = echarts.init(predictorDom)
     ecInstances.add(predictorChart)
     predictorChart.setOption({
       tooltip: { trigger: 'axis' },
