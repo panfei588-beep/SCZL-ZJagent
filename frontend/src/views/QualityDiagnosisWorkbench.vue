@@ -242,7 +242,7 @@
             <h3 class="card-title">异常链路推理结果 (自动规划中...)</h3>
           </div>
           <div class="card-body" v-if="diagnosisResult">
-            <div v-for="cause in diagnosisResult.root_causes" :key="cause.rank" class="cause-item">
+            <div v-for="cause in (diagnosisResult.root_causes || diagnosisResult.diagnosis_result)" :key="cause.rank" class="cause-item">
               <div class="cause-rank">NO.{{ cause.rank }}</div>
               <div class="cause-info">
                 <div class="cause-title-row">
@@ -403,7 +403,7 @@ const itemStatsTable = computed(() => {
 
   const groups = {}
   uploadedData.value.forEach(record => {
-    const groupKey = record.fileName || record.检测项 || '默认控制项'
+    const groupKey = record.fileName || record.检测项 || record.inspection_item || '默认控制项'
     if (!groups[groupKey]) groups[groupKey] = []
     // 兼容多种列名：实测值、测量值、value、raw_text
     const val = parseFloat(record.实测值 ?? record.测量值 ?? record.value ?? record.measured_value)
@@ -432,14 +432,14 @@ const itemStatsTable = computed(() => {
 
 const meanValue = computed(() => {
   if (uploadedData.value.length === 0) return 0
-  const values = uploadedData.value.map(r => parseFloat(r.实测值)).filter(v => !isNaN(v))
+  const values = uploadedData.value.map(r => parseFloat(r.实测值 ?? r.测量值 ?? r.value ?? r.measured_value)).filter(v => !isNaN(v))
   if (values.length === 0) return 0
   return values.reduce((a, b) => a + b, 0) / values.length
 })
 
 const variance = computed(() => {
   if (uploadedData.value.length === 0) return 0
-  const values = uploadedData.value.map(r => parseFloat(r.实测值)).filter(v => !isNaN(v))
+  const values = uploadedData.value.map(r => parseFloat(r.实测值 ?? r.测量值 ?? r.value ?? r.measured_value)).filter(v => !isNaN(v))
   if (values.length === 0) return 0
   const m = meanValue.value
   return values.reduce((a, b) => a + (b - m) ** 2, 0) / values.length
@@ -450,11 +450,11 @@ const stdDev = computed(() => Math.sqrt(variance.value))
 const initSamplingCharts = () => {
   if (uploadedData.value.length === 0) return
 
-  const values = uploadedData.value.map(r => parseFloat(r.实测值)).filter(v => !isNaN(v))
+  const values = uploadedData.value.map(r => parseFloat(r.实测值 ?? r.测量值 ?? r.value ?? r.measured_value)).filter(v => !isNaN(v))
   const labels = uploadedData.value.map((r, i) => {
-    if (r.日期) {
-      // Use only the date part YYYY-MM-DD
-      return r.日期.includes(' ') ? r.日期.split(' ')[0] : r.日期;
+    const dateVal = r.日期 ?? r.record_date
+    if (dateVal) {
+      return dateVal.includes(' ') ? dateVal.split(' ')[0] : dateVal;
     }
     // Fallback: Generate sequential historical dates for demo
     const d = new Date();
@@ -1198,7 +1198,7 @@ watch(currentStep, (newStep) => {
   } else if (newStep === 2) {
     nextTick(() => {
       // Fetch diagnosis results when entering Step 2
-      if (!diagnosisResult.value || !diagnosisResult.value.root_causes) {
+      if (!diagnosisResult.value || !(diagnosisResult.value.root_causes || diagnosisResult.value.diagnosis_result)) {
         fetchDiagnosisResultBackground().catch(() => {
           // Diagnosis API failed, still try to generate solutions with empty data
         }).finally(() => {
@@ -1295,9 +1295,16 @@ const fetchDiagnosisResultBackground = async () => {
     const data = await res.json()
     if (data.code === 200) {
       diagnosisResult.value = markRaw(data.data)
+      if (data.data?.error_message) {
+        console.warn('Diagnosis warning:', data.data.error_message)
+        ElMessage.warning(`诊断分析异常: ${data.data.error_message}`)
+      }
+    } else {
+      ElMessage.error(`诊断失败: ${data.message || '未知错误'}`)
     }
   } catch (e) {
     console.error('Diagnosis background fetch error:', e)
+    ElMessage.error('诊断请求失败，请检查后端服务是否正常')
   }
 }
 
@@ -1343,11 +1350,11 @@ const handleGenerateSolutions = async () => {
   const mask = ElLoading.service({ text: '正在规划最佳改进路径...', background: 'rgba(255, 255, 255, 0.8)' })
   try {
     // 先确保诊断结果已获取
-    if (!diagnosisResult.value || !diagnosisResult.value.root_causes) {
+    if (!diagnosisResult.value || !(diagnosisResult.value.root_causes || diagnosisResult.value.diagnosis_result)) {
       await fetchDiagnosisResultBackground()
     }
 
-    const rootCauses = diagnosisResult.value?.root_causes || []
+    const rootCauses = diagnosisResult.value?.root_causes || diagnosisResult.value?.diagnosis_result || []
     const res = await fetch('/api/solution/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1392,7 +1399,7 @@ const exportReport = async () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         statistics: report.statistics || {},
-        root_causes: report.root_causes || [],
+        root_causes: report.root_causes || report.diagnosis_result || [],
         solutions: sols,
         diagnosis_confidence: report.diagnosis_confidence || 0,
         total_records: totalRecords.value || 0,
