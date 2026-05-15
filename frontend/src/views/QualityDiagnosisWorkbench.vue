@@ -400,29 +400,26 @@ let scanInterval = null
 // Computed stats for text panel
 const itemStatsTable = computed(() => {
   if (uploadedData.value.length === 0) return []
-  
+
   const groups = {}
   uploadedData.value.forEach(record => {
     const groupKey = record.fileName || record.检测项 || '默认控制项'
-    if (!groups[groupKey]) {
-      groups[groupKey] = []
-    }
-    const val = parseFloat(record.实测值)
-    if (!isNaN(val)) {
-      groups[groupKey].push(val)
-    }
+    if (!groups[groupKey]) groups[groupKey] = []
+    // 兼容多种列名：实测值、测量值、value、raw_text
+    const val = parseFloat(record.实测值 ?? record.测量值 ?? record.value ?? record.measured_value)
+    if (!isNaN(val)) groups[groupKey].push(val)
   })
-  
+
   return Object.keys(groups).map(key => {
     const vals = groups[key]
     const count = vals.length
-    if (count === 0) return { key, count: 0, mean: '0.0000', max: '0.0000', min: '0.0000' }
-    
+    if (count === 0) return { key, count: uploadedData.value.length, mean: '-', max: '-', min: '-' }
+
     const sum = vals.reduce((a, b) => a + b, 0)
     const mean = sum / count
     const max = Math.max(...vals)
     const min = Math.min(...vals)
-    
+
     return {
       key,
       count,
@@ -1199,21 +1196,26 @@ watch(currentStep, (newStep) => {
       }, 100)
     })
   } else if (newStep === 2) {
-    // Fetch diagnosis results if not yet available, then auto-generate solutions
-    if (!diagnosisResult.value || !diagnosisResult.value.root_causes) {
-      fetchDiagnosisResultBackground().then(() => {
-        // Once diagnosis is ready, auto-generate solutions
-        setTimeout(() => {
-          handleGenerateSolutions()
-        }, 800)
-      })
-    } else if (solutions.value.length === 0) {
-      // Already have diagnosis, generate solutions
-      setTimeout(() => {
+    nextTick(() => {
+      // Fetch diagnosis results when entering Step 2
+      if (!diagnosisResult.value || !diagnosisResult.value.root_causes) {
+        fetchDiagnosisResultBackground().catch(() => {
+          // Diagnosis API failed, still try to generate solutions with empty data
+        }).finally(() => {
+          if (solutions.value.length === 0) {
+            handleGenerateSolutions()
+          }
+        })
+      } else if (solutions.value.length === 0) {
+        // Already have diagnosis, generate solutions in background
         handleGenerateSolutions()
-      }, 800)
-    }
+      }
+    })
   } else if (newStep === 3) {
+    // If solutions are not yet generated, trigger now
+    if (solutions.value.length === 0) {
+      handleGenerateSolutions()
+    }
     nextTick(() => {
       setTimeout(() => {
         initPortraitCharts()
