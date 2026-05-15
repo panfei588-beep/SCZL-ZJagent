@@ -53,6 +53,7 @@ llm = ChatTongyi(
     model="qwen-max",
     dashscope_api_key=settings.dashscope_api_key,
     temperature=0.3,
+    max_tokens=4096,
 )
 
 
