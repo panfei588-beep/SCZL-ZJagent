@@ -1362,8 +1362,51 @@ const getTagType = (cat) => {
 }
 
 const createWorkOrder = (sol) => ElMessage.success(`工单已派发至：${sol.responsible}`)
-const exportReport = () => ElMessage.success('方案报告已生成并自动下载')
 const previewReport = () => ElMessage.info('正在加载报告预览容器...')
+
+const exportReport = async () => {
+  const report = diagnosisResult.value || {}
+  const sols = solutions.value || []
+
+  const loading = ElLoading.service({ text: '正在生成 PDF 报告...', background: 'rgba(255, 255, 255, 0.8)' })
+  try {
+    const res = await fetch('/api/report/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        statistics: report.statistics || {},
+        root_causes: report.root_causes || [],
+        solutions: sols,
+        diagnosis_confidence: report.diagnosis_confidence || 0,
+        total_records: totalRecords.value || 0,
+        equipment: filter.value.device || '未指定',
+      }),
+    })
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      ElMessage.error(`PDF 生成失败：${err.detail || '未知错误'}`)
+      return
+    }
+
+    // 下载 PDF
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    const dateStr = new Date().toISOString().slice(0, 10)
+    a.download = `质量诊断报告_${dateStr}.pdf`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    ElMessage.success('诊断报告 PDF 已下载')
+  } catch (e) {
+    ElMessage.error('PDF 下载失败：' + e.message)
+  } finally {
+    loading.close()
+  }
+}
 
 const reset = () => {
   currentStep.value = 0
