@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# 安装系统依赖（MinerU 需要 + matplotlib CJK 字体）
+# 安装系统依赖（MinerU 需要 + matplotlib CJK 字体 + weasyprint PDF 生成需要）
 # 切换 apt 源为阿里云镜像（国内服务器加速）
 RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || \
     sed -i 's|http://deb.debian.org|http://mirrors.aliyun.com|g' /etc/apt/sources.list
@@ -15,6 +15,9 @@ RUN apt-get update && apt-get install -y \
     libgomp1 \
     fonts-noto-cjk \
     wget \
+    libpango-1.0-0 \
+    libharfbuzz-subset0 \
+    libpangoft2-1.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
