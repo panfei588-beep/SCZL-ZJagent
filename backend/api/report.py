@@ -176,11 +176,13 @@ async def generate_report(data: ReportData):
         pdf_bytes = HTML(string=html_content).write_pdf()
 
         from fastapi.responses import Response
+        from urllib.parse import quote
+        filename = f"质量诊断报告_{datetime.now().strftime('%Y%m%d')}.pdf"
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
             headers={
-                "Content-Disposition": f"attachment; filename=质量诊断报告_{datetime.now().strftime('%Y%m%d')}.pdf"
+                "Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"
             },
         )
 
