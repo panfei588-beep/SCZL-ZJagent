@@ -1199,21 +1199,25 @@ watch(currentStep, (newStep) => {
       }, 100)
     })
   } else if (newStep === 2) {
-    // Fetch diagnosis results if not yet available, then auto-generate solutions
-    if (!diagnosisResult.value || !diagnosisResult.value.root_causes) {
-      fetchDiagnosisResultBackground().then(() => {
-        // Once diagnosis is ready, auto-generate solutions
-        setTimeout(() => {
-          handleGenerateSolutions()
-        }, 800)
-      })
-    } else if (solutions.value.length === 0) {
-      // Already have diagnosis, generate solutions
-      setTimeout(() => {
+    nextTick(() => {
+      // Fetch diagnosis results when entering Step 2
+      if (!diagnosisResult.value || !diagnosisResult.value.root_causes) {
+        fetchDiagnosisResultBackground().then(() => {
+          // Once diagnosis is ready, auto-generate solutions in background
+          if (solutions.value.length === 0) {
+            handleGenerateSolutions()
+          }
+        })
+      } else if (solutions.value.length === 0) {
+        // Already have diagnosis, generate solutions in background
         handleGenerateSolutions()
-      }, 800)
-    }
+      }
+    })
   } else if (newStep === 3) {
+    // If solutions are not yet generated, trigger now
+    if (solutions.value.length === 0) {
+      handleGenerateSolutions()
+    }
     nextTick(() => {
       setTimeout(() => {
         initPortraitCharts()
