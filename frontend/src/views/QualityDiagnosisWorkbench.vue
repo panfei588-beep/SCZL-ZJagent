@@ -1228,13 +1228,13 @@ watch(currentStep, (newStep) => {
         })
       }, 100)
     })
-    // 自动模式：停留 5 秒展示图表后自动进入诊断
+    // 自动模式：图表初始化后自动进入诊断
     if (isAutoMode.value) {
       setTimeout(() => {
         if (isAutoMode.value && currentStep.value === 1) {
           currentStep.value = 2
         }
-      }, 5000)
+      }, 1000)
     }
   } else if (newStep === 2) {
     nextTick(() => {
@@ -1243,11 +1243,7 @@ watch(currentStep, (newStep) => {
         fetchDiagnosisResultBackground().then(() => {
           // 诊断完成后，自动进入改进方案
           if (isAutoMode.value && currentStep.value === 2) {
-            setTimeout(() => {
-              if (isAutoMode.value && currentStep.value === 2) {
-                currentStep.value = 3
-              }
-            }, 5000)
+            currentStep.value = 3
           }
         }).catch(() => {
           // Diagnosis API failed, still try to generate solutions with empty data
