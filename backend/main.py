@@ -6,6 +6,7 @@ import os
 from api.upload import router as upload_router
 from api.diagnosis import router as diagnosis_router
 from api.solution import router as solution_router
+from api.report import router as report_router
 from core.config import get_settings
 
 settings = get_settings()
@@ -27,6 +28,7 @@ app.add_middleware(
 app.include_router(upload_router, prefix="/api/upload", tags=["文件上传"])
 app.include_router(diagnosis_router, prefix="/api/diagnosis", tags=["AI诊断"])
 app.include_router(solution_router, prefix="/api/solution", tags=["改进方案"])
+app.include_router(report_router, prefix="/api/report", tags=["报告生成"])
 
 # 静态文件服务（图表图片）
 charts_dir = os.path.join(os.path.dirname(__file__), "charts")

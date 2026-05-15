@@ -406,7 +406,8 @@ def validate_diagnosis_node(state: QualityAgentState) -> dict:
 
 def decision_agent_node(state: QualityAgentState) -> dict:
     """Agent3: RAG 检索改善知识库 + LLM 生成改进方案"""
-    root_causes = state.get("diagnosis_result", [])
+    # 优先使用 user_params 中的 root_causes（兼容单独调用方案生成接口）
+    root_causes = state.get("user_params", {}).get("root_causes") or state.get("diagnosis_result", []) or []
     low_conf = state.get("low_confidence_flag", False)
     user_params = state.get("user_params", {})
 
