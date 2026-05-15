@@ -239,7 +239,7 @@
         <div class="card roots-card mb-24">
           <div class="card-header">
             <span class="header-tag danger">AI 核心根因诊断</span>
-            <h3 class="card-title">异常链路推理结果 (自动规划中...)</h3>
+            <h3 class="card-title">异常链路推理结果 <template v-if="diagnosisResult">| 诊断完成</template><template v-else>(自动规划中...)</template></h3>
           </div>
           <div class="card-body" v-if="diagnosisResult">
             <div v-for="cause in (diagnosisResult.root_causes || diagnosisResult.diagnosis_result)" :key="cause.rank" class="cause-item">
