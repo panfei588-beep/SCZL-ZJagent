@@ -925,7 +925,10 @@ const goToStep = (step) => {
     clearInterval(scanInterval)
     scanInterval = null
   }
-  isAutoMode.value = false
+  // 自动模式下点击步骤不中断自动流转
+  if (!isAutoMode.value) {
+    isAutoMode.value = false
+  }
   currentStep.value = step
 }
 
@@ -1195,6 +1198,21 @@ watch(currentStep, (newStep) => {
         })
       }, 100)
     })
+  } else if (newStep === 2) {
+    // Fetch diagnosis results if not yet available, then auto-generate solutions
+    if (!diagnosisResult.value || !diagnosisResult.value.root_causes) {
+      fetchDiagnosisResultBackground().then(() => {
+        // Once diagnosis is ready, auto-generate solutions
+        setTimeout(() => {
+          handleGenerateSolutions()
+        }, 800)
+      })
+    } else if (solutions.value.length === 0) {
+      // Already have diagnosis, generate solutions
+      setTimeout(() => {
+        handleGenerateSolutions()
+      }, 800)
+    }
   } else if (newStep === 3) {
     nextTick(() => {
       setTimeout(() => {
@@ -1249,11 +1267,8 @@ const startAIScan = () => {
         initSamplingCharts()
         initPortraitCharts()
       })
-      // Background: fetch real diagnosis and solutions
-      fetchDiagnosisResultBackground()
-      setTimeout(() => {
-        handleGenerateSolutions()
-      }, 1500)
+      // After user enters Step 1, wait for them to click to Step 2
+      // Then fetchDiagnosisResultBackground → auto-fetch solutions → Step 3
     }
   }, 50)
 }
