@@ -321,7 +321,7 @@
         </div>
 
         <div class="card-footer text-center mt-24">
-          <el-button size="large" @click="reset">归档并返回</el-button>
+          <el-button size="large" @click="goToStep(2)">返回诊断分析</el-button>
         </div>
       </div>
 
