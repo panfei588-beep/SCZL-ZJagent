@@ -1228,11 +1228,28 @@ watch(currentStep, (newStep) => {
         })
       }, 100)
     })
+    // 自动模式：停留 5 秒展示图表后自动进入诊断
+    if (isAutoMode.value) {
+      setTimeout(() => {
+        if (isAutoMode.value && currentStep.value === 1) {
+          currentStep.value = 2
+        }
+      }, 5000)
+    }
   } else if (newStep === 2) {
     nextTick(() => {
       // Fetch diagnosis results when entering Step 2
       if (!diagnosisResult.value || !(diagnosisResult.value.root_causes || diagnosisResult.value.diagnosis_result)) {
-        fetchDiagnosisResultBackground().catch(() => {
+        fetchDiagnosisResultBackground().then(() => {
+          // 诊断完成后，自动进入改进方案
+          if (isAutoMode.value && currentStep.value === 2) {
+            setTimeout(() => {
+              if (isAutoMode.value && currentStep.value === 2) {
+                currentStep.value = 3
+              }
+            }, 5000)
+          }
+        }).catch(() => {
           // Diagnosis API failed, still try to generate solutions with empty data
         }).finally(() => {
           if (solutions.value.length === 0) {
@@ -1241,6 +1258,10 @@ watch(currentStep, (newStep) => {
         })
       } else if (solutions.value.length === 0) {
         // Already have diagnosis, generate solutions in background
+        handleGenerateSolutions()
+      }
+      // 如果已有诊断结果，自动进入改进方案
+      if (solutions.value.length === 0) {
         handleGenerateSolutions()
       }
     })
