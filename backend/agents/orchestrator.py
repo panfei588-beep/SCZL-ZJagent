@@ -360,6 +360,16 @@ def diagnosis_agent_node(state: QualityAgentState) -> dict:
         result = _parse_llm_json(response.content)
 
         root_causes = result.get("root_causes", [])
+        # 过滤掉 LLM 兜底回复（"数据不足"类）
+        root_causes = [
+            c for c in root_causes
+            if "数据不足" not in c.get("cause", "")
+            and "无法基于" not in c.get("cause", "")
+        ]
+        # 按置信度降序排序，重新编号 rank（确保唯一性和一致性）
+        root_causes.sort(key=lambda c: c.get("confidence", 0), reverse=True)
+        for i, c in enumerate(root_causes):
+            c["rank"] = i + 1
         # 计算平均置信度
         if root_causes:
             avg_confidence = sum(
