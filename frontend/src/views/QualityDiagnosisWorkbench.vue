@@ -933,10 +933,8 @@ const goToStep = (step) => {
     filePaths.value = []
     fileMap.value = []
   }
-  // 自动模式下点击步骤不中断自动流转
-  if (!isAutoMode.value) {
-    isAutoMode.value = false
-  }
+  // 手动点击导航时退出自动模式
+  isAutoMode.value = false
   currentStep.value = step
 }
 
