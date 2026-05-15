@@ -104,7 +104,7 @@
             </div>
 
             <div class="action-footer mt-32">
-              <el-button type="primary" size="large" class="btn-glow btn-wide" :loading="loading" @click="startAIScan">
+              <el-button type="primary" size="large" class="btn-glow btn-wide" :loading="loading || isUploading" :disabled="isUploading" @click="startAIScan">
                 开始智能化诊断
               </el-button>
             </div>
@@ -230,7 +230,7 @@
 
         <div class="action-footer mt-24">
           <el-button size="large" @click="goToStep(0)">返回重选数据</el-button>
-          <el-button type="primary" size="large" @click="goToStep(2)">执行智能分析与方案规划</el-button>
+          <el-button type="primary" size="large" :disabled="isUploading || uploadedData.length === 0" @click="goToStep(2)">执行智能分析与方案规划</el-button>
         </div>
       </div>
 
@@ -289,7 +289,7 @@
           <div class="card-header header-flex">
             <h3 class="card-title">智能化质量体系改进规划</h3>
             <div class="header-actions">
-              <el-button type="primary" plain class="btn-sm" @click="exportReport">
+              <el-button type="primary" plain class="btn-sm" :disabled="isSolving || solutions.length === 0" @click="exportReport">
                 <el-icon><Download /></el-icon> 下载诊断报告
               </el-button>
             </div>
@@ -369,6 +369,8 @@ const router = useRouter()
 const currentStep = ref(0)
 const isAutoMode = ref(false)
 const loading = ref(false)
+const isUploading = ref(false)
+const isSolving = ref(false)
 const scanProgress = ref(0)
 const diagnosticLogs = ref([])
 
@@ -1144,6 +1146,7 @@ const handleFileChange = async (uploadFile) => {
   const formData = new FormData()
   formData.append('file', file)
 
+  isUploading.value = true
   try {
     const res = await fetch('/api/upload/file', {
       method: 'POST',
@@ -1158,6 +1161,7 @@ const handleFileChange = async (uploadFile) => {
       filePaths.value = []
       fileMap.value = []
       ElMessage.error(`${file.name} 上传失败：${errData.detail || '请检查网络连接或后端服务'}`)
+      isUploading.value = false
       return
     }
 
@@ -1179,6 +1183,7 @@ const handleFileChange = async (uploadFile) => {
       ElMessage.success(`${file.name} 解析成功，共 ${data.data.total_records} 条记录`)
       nextTick(() => initSamplingCharts())
     }
+    isUploading.value = false
   } catch (e) {
     console.error('Upload process error:', e)
     uploadedData.value = []
@@ -1186,6 +1191,7 @@ const handleFileChange = async (uploadFile) => {
     filePaths.value = []
     fileMap.value = []
     ElMessage.error(`${file.name} 上传失败，请检查网络连接或后端服务`)
+    isUploading.value = false
   }
 }
 
@@ -1219,7 +1225,7 @@ watch(currentStep, (newStep) => {
         initPortraitCharts()
         requestAnimationFrame(() => {
           ecInstances.forEach(inst => {
-            if (typeof inst.resize === 'function') inst.resize()
+            try { if (typeof inst.resize === 'function') inst.resize() } catch (_) {}
           })
         })
       }, 100)
@@ -1250,7 +1256,7 @@ watch(currentStep, (newStep) => {
         initPortraitCharts()
         requestAnimationFrame(() => {
           ecInstances.forEach(inst => {
-            if (typeof inst.resize === 'function') inst.resize()
+            try { if (typeof inst.resize === 'function') inst.resize() } catch (_) {}
           })
         })
       }, 100)
@@ -1343,7 +1349,12 @@ const initPortraitCharts = () => {
   // Predictor Chart
   const predictorDom = document.getElementById('predictorChart')
   if (predictorDom) {
-    const predictorChart = echarts.getInstanceByDom(predictorDom) || echarts.init(predictorDom)
+    const stale = echarts.getInstanceByDom(predictorDom)
+    if (stale) {
+      ecInstances.delete(stale)
+      stale.dispose()
+    }
+    const predictorChart = echarts.init(predictorDom)
     ecInstances.add(predictorChart)
     predictorChart.setOption({
       tooltip: { trigger: 'axis' },
@@ -1376,6 +1387,7 @@ const initPortraitCharts = () => {
 }
 
 const handleGenerateSolutions = async () => {
+  isSolving.value = true
   const mask = ElLoading.service({ text: '正在规划最佳改进路径...', background: 'rgba(255, 255, 255, 0.8)' })
   try {
     // 先确保诊断结果已获取
@@ -1405,6 +1417,7 @@ const handleGenerateSolutions = async () => {
     ElMessage.error('方案生成失败: ' + e.message)
   } finally {
     mask.close()
+    isSolving.value = false
   }
 }
 
