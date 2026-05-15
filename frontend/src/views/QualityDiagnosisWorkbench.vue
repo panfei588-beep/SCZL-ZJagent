@@ -1168,7 +1168,7 @@ const handleFileChange = async (uploadFile) => {
     const data = await res.json()
     if (data.code === 200) {
       // 给每条记录打上文件名标签，方便删除时按文件过滤
-      const tagged = data.data.records.map((r: Record<string, unknown>) => ({
+      const tagged = data.data.records.map((r) => ({
         ...r,
         _fileName: file.name
       }))
@@ -1197,8 +1197,8 @@ const handleFileChange = async (uploadFile) => {
 
 const handleFileRemove = (file) => {
   // 只删除被删除文件对应的记录，保留其他文件数据
-  const removedCount = uploadedData.value.filter((r: Record<string, unknown>) => r._fileName === file.name).length
-  uploadedData.value = uploadedData.value.filter((r: Record<string, unknown>) => r._fileName !== file.name)
+  const removedCount = uploadedData.value.filter((r) => r._fileName === file.name).length
+  uploadedData.value = uploadedData.value.filter((r) => r._fileName !== file.name)
   totalRecords.value -= removedCount
 
   // 从 fileMap 中找到对应的路径并移除
