@@ -28,9 +28,9 @@ class RootCause(BaseModel):
     root_cause: str = ""
     category: str = ""
     confidence: float = 0.5
-    evidence: list = []
+    evidence: str | list = []
     impact: str = ""
-    affected_fields: list = []
+    affected_fields: str | list = []
 
 
 class SolutionRequest(BaseModel):
