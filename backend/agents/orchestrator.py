@@ -5,6 +5,7 @@ LangGraph StateGraph 质量诊断工作流编排
 
 from __future__ import annotations
 
+import time
 import json
 import logging
 import os
@@ -54,7 +55,7 @@ class QualityAgentState(TypedDict):
 llm = ChatTongyi(
     model="qwen-max",
     dashscope_api_key=settings.dashscope_api_key,
-    temperature=0.3,
+    temperature=0.1,
     max_tokens=4096,
 )
 
@@ -63,6 +64,7 @@ llm = ChatTongyi(
 
 def supervisor_node(state: QualityAgentState) -> dict:
     """Supervisor 路由调度节点: 负责任务分发 / 状态管理 / 异常路由"""
+    start = time.time()
     file_path = state.get("raw_file_path", "")
     user_params = state.get("user_params", {})
     retry_count = state.get("data_retry_count", 0)
@@ -72,6 +74,8 @@ def supervisor_node(state: QualityAgentState) -> dict:
     if data_valid is False and retry_count < settings.data_retry_limit:
         # 数据校验失败，回退重试
         logging.info(f"[supervisor] 数据校验失败，回退重试 (第 {retry_count + 1} 次)")
+        elapsed = time.time() - start
+        logging.info(f"[supervisor] 耗时 {elapsed:.2f}s")
         return {
             "data_valid": None,  # 重置校验状态
             "routing_decision": "retry",
@@ -80,6 +84,8 @@ def supervisor_node(state: QualityAgentState) -> dict:
     elif data_valid is False and retry_count >= settings.data_retry_limit:
         # 重试耗尽，降级继续
         logging.warning(f"[supervisor] 数据重试耗尽 ({retry_count} 次)，降级继续")
+        elapsed = time.time() - start
+        logging.info(f"[supervisor] 耗时 {elapsed:.2f}s")
         return {
             "routing_decision": "diagnosis_agent",
             "flag": "DATA_ERROR",
@@ -87,6 +93,8 @@ def supervisor_node(state: QualityAgentState) -> dict:
         }
 
     logging.info(f"[supervisor] 路由调度: 文件={file_path}, 设备={user_params.get('equipment', 'N/A')}")
+    elapsed = time.time() - start
+    logging.info(f"[supervisor] 耗时 {elapsed:.2f}s")
     return {
         "routing_decision": "data_agent",
         "flag": "NORMAL",
@@ -96,6 +104,7 @@ def supervisor_node(state: QualityAgentState) -> dict:
 
 def data_agent_node(state: QualityAgentState) -> dict:
     """Agent1: 解析文件 → 统计计算 → 生成图表"""
+    start = time.time()
     file_path = state["raw_file_path"]
     logging.info(f"[data_agent] 解析文件: {file_path}")
 
@@ -239,6 +248,8 @@ def data_agent_node(state: QualityAgentState) -> dict:
         logging.error(f"[data_agent] 解析失败: {e}", exc_info=True)
         statistics["error"] = str(e)
 
+    elapsed = time.time() - start
+    logging.info(f"[data_agent] 耗时 {elapsed:.2f}s")
     return {
         "parsed_data": parsed_data,
         "statistics": statistics,
@@ -287,18 +298,19 @@ def should_retry_data(state: QualityAgentState) -> str:
 
 
 def diagnosis_agent_node(state: QualityAgentState) -> dict:
-    """Agent2: RAG 检索 + LLM 6维根因分析"""
+    """Agent2: RAG 检索 + LLM 根因分析"""
+    start = time.time()
     stats = state.get("statistics", {})
     user_params = state.get("user_params", {})
 
     logging.info("[diagnosis_agent] 开始诊断分析")
 
-    # RAG 检索诊断知识库
+    # RAG 检索诊断知识库（优化: top_k=3 减少检索时间）
     equipment = user_params.get("equipment", "未指定设备")
-    query = f"{equipment} 质量异常 合格率下降"
-    similar_cases = search_diagnosis_cases(query, top_k=settings.rag_top_k)
+    query = f"{equipment} 质量异常"
+    similar_cases = search_diagnosis_cases(query, top_k=3)
 
-    # 构建上下文
+    # 构建上下文（优化: 精简统计数据，减少 token）
     context_parts = [
         f"设备: {equipment}",
         f"总记录数: {stats.get('total_records', 0)}",
@@ -309,14 +321,13 @@ def diagnosis_agent_node(state: QualityAgentState) -> dict:
     if "numeric_stats" in stats:
         for col, s in stats["numeric_stats"].items():
             context_parts.append(
-                f"数值列 {col}: max={s['max']}, min={s['min']}, "
-                f"mean={s['mean']}, std={s['std']}, "
-                f"包络线=[{s['envelope_lower']}, {s['envelope_upper']}]"
+                f"数值列 {col}: max={s['max']}, min={s['min']}, mean={s['mean']}, std={s['std']}"
             )
 
     if "trend_dates" in stats and "trend_rates" in stats:
-        context_parts.append(f"合格率趋势: 初始={stats['trend_rates'][0]}%, 当前={stats['trend_rates'][-1]}%")
-        context_parts.append(f"趋势数据: dates={stats['trend_dates']}, rates={stats['trend_rates']}")
+        dates = stats["trend_dates"]
+        rates = stats["trend_rates"]
+        context_parts.append(f"合格率趋势: 初始={rates[0]}%, 当前={rates[-1]}%, 共{len(dates)}天")
 
     if "top_fail_items" in stats:
         context_parts.append(f"主要不合格项: {stats['top_fail_items']}")
@@ -328,14 +339,13 @@ def diagnosis_agent_node(state: QualityAgentState) -> dict:
     if user_params.get("environment"):
         context_parts.append(f"环境: {user_params['environment']}")
 
-    # 相似案例
+    # 相似案例（优化: 只传 title + root_cause）
     case_texts = []
     has_kb_ref = False
     for c in similar_cases:
         if "error" not in c:
             case_texts.append(
-                f"[{c['case_id']}] {c['title']} | 根因: {c.get('root_cause', '')} "
-                f"| 方案: {c.get('solution', '')} | 相似度: {c.get('similarity', 0)}"
+                f"[{c['case_id']}] {c['title']} | 根因: {c.get('root_cause', '')}"
             )
             has_kb_ref = True
     context_parts.append(f"相似案例: {'; '.join(case_texts) if case_texts else '无'}")
@@ -421,6 +431,8 @@ Step3: 根因推理 - 结合异常特征 + 知识库内容，输出根因列表�
 
     except Exception as e:
         logging.error(f"[diagnosis_agent] LLM 推理失败: {e}", exc_info=True)
+        elapsed = time.time() - start
+        logging.info(f"[diagnosis_agent] 耗时 {elapsed:.2f}s (失败)")
         return {
             "diagnosis_result": [],
             "diagnosis_confidence": 0.5,
@@ -452,6 +464,7 @@ def validate_diagnosis_node(state: QualityAgentState) -> dict:
 
 def decision_agent_node(state: QualityAgentState) -> dict:
     """Agent3: RAG 检索改善知识库 + LLM 生成改进方案"""
+    start = time.time()
     # 优先使用 user_params 中的 root_causes（兼容单独调用方案生成接口）
     root_causes = state.get("user_params", {}).get("root_causes") or state.get("diagnosis_result", []) or []
     low_conf = state.get("low_confidence_flag", False)
@@ -459,19 +472,18 @@ def decision_agent_node(state: QualityAgentState) -> dict:
 
     logging.info("[decision_agent] 开始生成改进方案")
 
-    # RAG 检索改善知识库
+    # RAG 检索改善知识库（优化: top_k=3 减少检索时间）
     equipment = user_params.get("equipment", "未指定设备")
-    # 根据根因构建检索 query
-    cause_keywords = [c.get("cause", "") for c in root_causes if c.get("cause")]
+    cause_keywords = [c.get("cause", c.get("root_cause", "")) for c in root_causes if c.get("cause", c.get("root_cause", ""))]
     query = f"{equipment} 质量改善 {' '.join(cause_keywords)}"
-    improvement_cases = search_improvement_cases(query, top_k=settings.rag_top_k)
+    improvement_cases = search_improvement_cases(query, top_k=3)
 
+    # 案例精简（优化: 只传 title + solution + effect）
     case_texts = []
     for c in improvement_cases:
         if "error" not in c:
             case_texts.append(
-                f"[{c['case_id']}] {c['title']} | 方案: {c.get('solution', '')} "
-                f"| 效果: {c.get('effect', '')} | 相似度: {c.get('similarity', 0)}"
+                f"[{c['case_id']}] {c['title']} | 方案: {c.get('solution', '')} | 效果: {c.get('effect', '')}"
             )
 
     warning_text = "⚠ 注意：本次诊断置信度较低，以下方案仅供参考" if low_conf else ""
@@ -507,10 +519,18 @@ Step3: 方案生成 - 匹配历史案例 → 定制改进方案，每条措施�
 - low_confidence_flag=true 时，每条方案必须含 uncertainty_note"""
 
     case_lines = '\n'.join(case_texts) if case_texts else '无历史改善案例'
+    # 优化: 压缩 root_causes 为单行，只传必要字段
+    causes_summary = []
+    for c in root_causes:
+        causes_summary.append({
+            "cause": c.get("cause", c.get("root_cause", "")),
+            "confidence": c.get("confidence", 0.5),
+            "impact": c.get("impact", c.get("evidence", "")),
+        })
     human_prompt = f"""基于以下根因分析结果，生成改进方案：
 
 根因列表：
-{json.dumps(root_causes, ensure_ascii=False, indent=2)}
+{json.dumps(causes_summary, ensure_ascii=False)}
 
 设备：{equipment or '未指定'}
 
@@ -528,6 +548,8 @@ Step3: 方案生成 - 匹配历史案例 → 定制改进方案，每条措施�
             plan = []
 
         estimated = "预计整体合格率可提升 2-5 个百分点"
+        elapsed = time.time() - start
+        logging.info(f"[decision_agent] 耗时 {elapsed:.2f}s")
         return {
             "improvement_plan": plan,
             "estimated_improvement": estimated,
@@ -535,6 +557,8 @@ Step3: 方案生成 - 匹配历史案例 → 定制改进方案，每条措施�
 
     except Exception as e:
         logging.error(f"[decision_agent] 方案生成失败: {e}", exc_info=True)
+        elapsed = time.time() - start
+        logging.info(f"[decision_agent] 耗时 {elapsed:.2f}s (失败)")
         return {
             "improvement_plan": [],
             "estimated_improvement": "",
@@ -593,26 +617,31 @@ def output_merger_node(state: QualityAgentState) -> dict:
 
 def knowledge_node(state: QualityAgentState) -> dict:
     """知识沉淀节点: 从最终输出中提炼新知识，写入对应知识库"""
+    start = time.time()
     candidate = state.get("knowledge_candidate") or {}
     overall_conf = candidate.get("overall_confidence", 0)
     low_conf = candidate.get("low_confidence_flag", False)
 
+    # 优化: 置信度太低直接跳过，不执行 Milvus 写入
+    if overall_conf < 0.5:
+        logging.info(f"[knowledge_node] 置信度不足 ({overall_conf})，跳过沉淀")
+        return {
+            "knowledge_persisted": {
+                "should_persist": False,
+                "persist_target": "skip",
+                "kb_write_status": "SKIP",
+            },
+        }
+
     # 沉淀规则
     # ① overall_confidence >= 0.7 → 正式库
     # ② low_confidence_flag=true → 待验证暂存区
-    # ③ 否则跳过
-    if low_conf or overall_conf < 0.7:
+    if low_conf:
         persist_target = "pending_kb"
-        should_persist = True
         logging.info(f"[knowledge_node] 低置信度 ({overall_conf})，写入待验证暂存区")
-    elif overall_conf >= 0.7:
-        persist_target = "formal_kb"
-        should_persist = True
-        logging.info(f"[knowledge_node] 高置信度 ({overall_conf})，写入正式知识库")
     else:
-        persist_target = "skip"
-        should_persist = False
-        logging.info(f"[knowledge_node] 置信度不足 ({overall_conf})，跳过沉淀")
+        persist_target = "formal_kb"
+        logging.info(f"[knowledge_node] 高置信度 ({overall_conf})，写入正式知识库")
 
     # 构建知识条目
     anomaly_pattern = candidate.get("anomaly_pattern", {})
@@ -666,9 +695,11 @@ def knowledge_node(state: QualityAgentState) -> dict:
         success = write_to_diagnosis_kb(kb_text, kb_meta)
         kb_write_status = "SUCCESS" if success else "FAIL"
 
+    elapsed = time.time() - start
+    logging.info(f"[knowledge_node] 耗时 {elapsed:.2f}s, status={kb_write_status}")
     return {
         "knowledge_persisted": {
-            "should_persist": should_persist,
+            "should_persist": True,
             "persist_target": persist_target,
             "diagnosis_knowledge": diagnosis_knowledge,
             "improvement_case": improvement_case,
