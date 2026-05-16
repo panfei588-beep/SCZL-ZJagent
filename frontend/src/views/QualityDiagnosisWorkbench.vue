@@ -246,14 +246,19 @@
               <div class="cause-rank">NO.{{ cause.rank }}</div>
               <div class="cause-info">
                 <div class="cause-title-row">
-                  <h4 class="cause-name">{{ cause.cause }}</h4>
-                  <el-tag :type="getTagType(cause.category)" size="small" effect="dark">{{ cause.category }}</el-tag>
-                  <span class="confidence">置信度: {{ (cause.confidence * 100).toFixed(0) }}%</span>
+                  <h4 class="cause-name">{{ cause.cause || cause.root_cause }}</h4>
+                  <el-tag v-if="cause.category" :type="getTagType(cause.category)" size="small" effect="dark">{{ cause.category }}</el-tag>
+                  <span class="confidence">置信度: {{ ((cause.confidence ?? 0.5) * 100).toFixed(0) }}%</span>
                 </div>
-                <p class="cause-impact">{{ cause.impact }}</p>
-                <div class="evidence-list">
+                <p class="cause-impact">{{ cause.impact || cause.evidence || '' }}</p>
+                <div class="evidence-list" v-if="Array.isArray(cause.evidence)">
                   <div v-for="(ev, idx) in cause.evidence" :key="idx" class="evidence-tag">
                     <el-icon><Check /></el-icon> {{ ev }}
+                  </div>
+                </div>
+                <div class="evidence-list" v-else-if="cause.evidence">
+                  <div class="evidence-tag">
+                    <el-icon><Check /></el-icon> {{ cause.evidence }}
                   </div>
                 </div>
               </div>
