@@ -56,7 +56,8 @@ def build_report_html(data: ReportData) -> str:
     # 根因分析
     causes_html = ""
     for c in causes:
-        evidence = "；".join(c.get("evidence", []))
+        ev = c.get("evidence", [])
+        evidence = "；".join(ev) if isinstance(ev, list) else (ev or "")
         impact = c.get("impact", "")
         conf_pct = round((c.get("confidence", 0) or 0) * 100)
         cat = c.get("category", "")
