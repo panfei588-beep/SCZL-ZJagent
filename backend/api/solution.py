@@ -22,6 +22,7 @@ llm = ChatTongyi(
 
 
 class RootCause(BaseModel):
+    model_config = {"extra": "allow"}
     rank: int = 0
     cause: str = ""
     root_cause: str = ""
