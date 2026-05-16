@@ -1,7 +1,8 @@
 """
-Milvus 向量数据库客户端（双库版）
+Milvus 向量数据库客户端（双库版 + 待验证暂存区）
 诊断知识库 (diagnosis_cases) — 用于根因分析检索
 改善知识库 (improvement_cases) — 用于改进方案检索
+待验证暂存区 (pending_diagnosis_cases) — 低置信度知识暂存
 """
 
 from langchain_community.vectorstores import Milvus
@@ -13,6 +14,7 @@ settings = get_settings()
 
 _diagnosis_vectorstore = None
 _improvement_vectorstore = None
+_pending_diagnosis_vectorstore = None
 
 
 def _get_embeddings() -> DashScopeEmbeddings:
@@ -180,3 +182,56 @@ def build_knowledge_base(cases: list[dict]) -> int:
     d_count = build_diagnosis_kb(cases)
     i_count = build_improvement_kb(cases)
     return d_count + i_count
+
+
+# ---- 待验证暂存区 ----
+
+def get_pending_diagnosis_vectorstore() -> Milvus:
+    """获取待验证诊断知识库"""
+    global _pending_diagnosis_vectorstore
+    if _pending_diagnosis_vectorstore is None:
+        _pending_diagnosis_vectorstore = Milvus(
+            embedding_function=_get_embeddings(),
+            collection_name="pending_diagnosis_cases",
+            connection_args=_connection_args(),
+        )
+    return _pending_diagnosis_vectorstore
+
+
+def write_to_diagnosis_kb(text: str, metadata: dict) -> bool:
+    """写入诊断知识库（不 drop_old，追加模式）"""
+    try:
+        vs = get_diagnosis_vectorstore()
+        doc = Document(page_content=text, metadata=metadata)
+        vs.add_documents([doc])
+        return True
+    except Exception as e:
+        import logging
+        logging.error(f"[milvus] 写入诊断知识库失败: {e}")
+        return False
+
+
+def write_to_improvement_kb(text: str, metadata: dict) -> bool:
+    """写入改善知识库（不 drop_old，追加模式）"""
+    try:
+        vs = get_improvement_vectorstore()
+        doc = Document(page_content=text, metadata=metadata)
+        vs.add_documents([doc])
+        return True
+    except Exception as e:
+        import logging
+        logging.error(f"[milvus] 写入改善知识库失败: {e}")
+        return False
+
+
+def write_to_pending_kb(text: str, metadata: dict) -> bool:
+    """写入待验证暂存区（不 drop_old，追加模式）"""
+    try:
+        vs = get_pending_diagnosis_vectorstore()
+        doc = Document(page_content=text, metadata=metadata)
+        vs.add_documents([doc])
+        return True
+    except Exception as e:
+        import logging
+        logging.error(f"[milvus] 写入待验证暂存区失败: {e}")
+        return False

@@ -47,9 +47,11 @@ async def analyze(request: QualityAnalyzeRequest):
         all_diagnosis = []
         all_improvement = []
         low_confidence = False
+        last_result = {}
 
         for fp in paths:
             result = await run_analysis(file_path=fp, user_params=user_params)
+            last_result = result
             if result.get("statistics"):
                 all_statistics[fp] = result["statistics"]
             if result.get("charts"):
@@ -61,10 +63,9 @@ async def analyze(request: QualityAnalyzeRequest):
             if result.get("low_confidence_warning"):
                 low_confidence = True
 
-        # 如果只有一个文件，直接返回结果
-        if len(paths) == 1 and all_diagnosis:
-            single_result = await run_analysis(file_path=paths[0], user_params=user_params)
-            return {"code": 200, "message": "诊断完成", "data": single_result}
+        # 单文件直接返回结果（修复：之前调用了两次 run_analysis）
+        if len(paths) == 1:
+            return {"code": 200, "message": "诊断完成", "data": last_result}
 
         # 多文件合并结果
         avg_confidence = 0
