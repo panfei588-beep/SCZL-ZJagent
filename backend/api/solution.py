@@ -22,12 +22,14 @@ llm = ChatTongyi(
 
 
 class RootCause(BaseModel):
-    rank: int
-    cause: str
-    category: str
-    confidence: float
-    evidence: List[str]
-    impact: str
+    rank: int = 0
+    cause: str = ""
+    root_cause: str = ""
+    category: str = ""
+    confidence: float = 0.5
+    evidence: list = []
+    impact: str = ""
+    affected_fields: list = []
 
 
 class SolutionRequest(BaseModel):

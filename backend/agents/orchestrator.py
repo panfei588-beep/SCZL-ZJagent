@@ -1,6 +1,6 @@
 """
 LangGraph StateGraph 质量诊断工作流编排
-6 节点：data_agent → validate_data → diagnosis_agent → validate_diagnosis → decision_agent → output_merger
+8 节点：supervisor → data_agent → validate_data → diagnosis_agent → validate_diagnosis → decision_agent → output_merger → knowledge_node
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from core.config import get_settings
 from services.file_parser import parse_file
 from services.chart_generator import generate_trend_chart, generate_distribution_chart
-from knowledge_base.milvus_client import search_diagnosis_cases, search_improvement_cases
+from knowledge_base.milvus_client import search_diagnosis_cases, search_improvement_cases, write_to_diagnosis_kb, write_to_improvement_kb, write_to_pending_kb
 
 settings = get_settings()
 
@@ -45,6 +45,8 @@ class QualityAgentState(TypedDict):
     estimated_improvement: Optional[str]     # 预估提升效果
     final_output: Optional[dict]             # 最终输出
     error_message: Optional[str]             # 异常信息
+    knowledge_candidate: Optional[dict]      # 知识沉淀候选内容
+    knowledge_persisted: Optional[dict]      # 知识沉淀结果
 
 
 # ======================== LLM 初始化 ========================
@@ -58,6 +60,39 @@ llm = ChatTongyi(
 
 
 # ======================== 节点函数 ========================
+
+def supervisor_node(state: QualityAgentState) -> dict:
+    """Supervisor 路由调度节点: 负责任务分发 / 状态管理 / 异常路由"""
+    file_path = state.get("raw_file_path", "")
+    user_params = state.get("user_params", {})
+    retry_count = state.get("data_retry_count", 0)
+    data_valid = state.get("data_valid")
+
+    # 路由决策
+    if data_valid is False and retry_count < settings.data_retry_limit:
+        # 数据校验失败，回退重试
+        logging.info(f"[supervisor] 数据校验失败，回退重试 (第 {retry_count + 1} 次)")
+        return {
+            "data_valid": None,  # 重置校验状态
+            "routing_decision": "retry",
+            "retry_target": "data_agent",
+        }
+    elif data_valid is False and retry_count >= settings.data_retry_limit:
+        # 重试耗尽，降级继续
+        logging.warning(f"[supervisor] 数据重试耗尽 ({retry_count} 次)，降级继续")
+        return {
+            "routing_decision": "diagnosis_agent",
+            "flag": "DATA_ERROR",
+            "check_reason": f"数据校验失败，重试 {retry_count} 次",
+        }
+
+    logging.info(f"[supervisor] 路由调度: 文件={file_path}, 设备={user_params.get('equipment', 'N/A')}")
+    return {
+        "routing_decision": "data_agent",
+        "flag": "NORMAL",
+        "check_reason": "",
+    }
+
 
 def data_agent_node(state: QualityAgentState) -> dict:
     """Agent1: 解析文件 → 统计计算 → 生成图表"""
@@ -305,53 +340,45 @@ def diagnosis_agent_node(state: QualityAgentState) -> dict:
             has_kb_ref = True
     context_parts.append(f"相似案例: {'; '.join(case_texts) if case_texts else '无'}")
 
-    # LLM 推理
-    system_prompt = """你是一位航天运载火箭质量管理专家，负责诊断质量异常问题。
+    # LLM 推理 - 按需求文档 Agent2 Prompt 定义
+    system_prompt = """你是企业级异常诊断智能体，基于统计数据和知识库检索，输出根因分析报告。
 
-请基于提供的数据进行"人机料法环测"6维根因分析：
-- 人（Man）：操作人员技能、经验、疲劳度
-- 机（Machine）：设备状态、磨损、校准
-- 料（Material）：原材料批次、供应商、规格
-- 法（Method）：工艺参数、操作规程
-- 测（Measurement）：测量设备精度、校准状态
+## Task Steps
+Step1: 提取异常特征 - 从统计数据中识别异常字段和异常值区间
+Step2: RAG 知识库检索 - 结合提供的知识库内容进行匹配
+Step3: 根因推理 - 结合异常特征 + 知识库内容，输出根因列表，每条附相关性分数和证据链
 
-要求：
-- 每个根因必须有置信度评分(0-1)和具体证据
-- 按置信度从高到低排序
-- 根因类别 category 必须是以下之一: 人, 机, 料, 法, 环, 测
-
-请严格以JSON格式返回，不要有其他文字：
+## Output Format (严格 JSON)
 {
-    "quality_trend": {
-        "dates": [...],
-        "rates": [...],
-        "initial_rate": float,
-        "current_rate": float,
-        "decline": float
-    },
-    "root_causes": [
-        {
-            "rank": int,
-            "cause": str,
-            "category": str,
-            "confidence": float,
-            "evidence": [str],
-            "impact": str
-        }
-    ],
-    "similar_cases": [
-        {
-            "case_id": str,
-            "title": str,
-            "similarity": float,
-            "solution": str
-        }
-    ]
-}"""
+  "diagnosis": [
+    {
+      "rank": 1,
+      "root_cause": "根因描述（≤ 50 字）",
+      "confidence": 0.85,
+      "evidence": "知识库依据摘要（≤ 80 字）",
+      "affected_fields": ["字段名"]
+    }
+  ],
+  "overall_confidence": 0.82,
+  "low_confidence_flag": false,
+  "kb_retrieval_count": 3
+}
 
-    human_prompt = "请对以下质量数据进行完整的异常诊断分析：\n" + "\n".join(
-        f"- {p}" for p in context_parts
-    )
+## Constraints
+- 根因条数: 3〜5 条，按 confidence 降序排列
+- confidence < 0.6 时，low_confidence_flag 设为 true
+- 禁止输出知识库中不存在的根因（严禁幻觉）
+- 每条 root_cause 必须有 evidence 支撑"""
+
+    human_prompt = f"""请对以下质量数据进行完整的异常诊断分析：
+
+统计数据：
+{json.dumps(stats, ensure_ascii=False, indent=2)}
+
+参考案例：
+{'; '.join(case_texts) if case_texts else '暂无知识库数据，基于统计数据推理'}
+
+分析目标：{user_params.get('analysis_goal', '找根因')}"""
 
     try:
         response = llm.invoke(
@@ -359,27 +386,35 @@ def diagnosis_agent_node(state: QualityAgentState) -> dict:
         )
         result = _parse_llm_json(response.content)
 
-        root_causes = result.get("root_causes", [])
-        # 过滤掉 LLM 兜底回复（"数据不足"类）
-        root_causes = [
-            c for c in root_causes
-            if "数据不足" not in c.get("cause", "")
-            and "无法基于" not in c.get("cause", "")
+        # 适配新格式: diagnosis → diagnosis_result
+        diagnosis_list = result.get("diagnosis", result.get("root_causes", []))
+        overall_conf = result.get("overall_confidence", 0.5)
+
+        # 过滤掉 LLM 兜底回复
+        diagnosis_list = [
+            c for c in diagnosis_list
+            if "数据不足" not in c.get("root_cause", c.get("cause", ""))
+            and "无法基于" not in c.get("root_cause", c.get("cause", ""))
         ]
-        # 按置信度降序排序，重新编号 rank（确保唯一性和一致性）
-        root_causes.sort(key=lambda c: c.get("confidence", 0), reverse=True)
-        for i, c in enumerate(root_causes):
+
+        # 按置信度降序排序，重新编号 rank
+        diagnosis_list.sort(key=lambda c: c.get("confidence", 0), reverse=True)
+        for i, c in enumerate(diagnosis_list):
             c["rank"] = i + 1
+            # 兼容旧格式: 确保 cause 字段存在
+            if "root_cause" in c and "cause" not in c:
+                c["cause"] = c["root_cause"]
+            if "cause" in c and "root_cause" not in c:
+                c["root_cause"] = c["cause"]
+
         # 计算平均置信度
-        if root_causes:
-            avg_confidence = sum(
-                c.get("confidence", 0.5) for c in root_causes
-            ) / len(root_causes)
+        if diagnosis_list:
+            avg_confidence = sum(c.get("confidence", 0.5) for c in diagnosis_list) / len(diagnosis_list)
         else:
-            avg_confidence = 0.5
+            avg_confidence = overall_conf if overall_conf else 0.5
 
         return {
-            "diagnosis_result": root_causes,
+            "diagnosis_result": diagnosis_list,
             "diagnosis_confidence": round(avg_confidence, 3),
             "diagnosis_has_kb_ref": has_kb_ref,
         }
@@ -441,24 +476,37 @@ def decision_agent_node(state: QualityAgentState) -> dict:
 
     warning_text = "⚠ 注意：本次诊断置信度较低，以下方案仅供参考" if low_conf else ""
 
-    system_prompt = """你是质量改进专家。请为每个根因生成具体的改进方案。
+    system_prompt = """你是企业级决策支持智能体，基于诊断结论和改善案例知识库，生成可落地的改进方案。
 
-参考历史改善案例，确保方案有依据。
+## Task Steps
+Step1: 解析诊断结论 - 提取 confidence ≥ 0.5 的根因条目，若有 low_confidence_flag 则标注不确定性
+Step2: RAG 知识库检索 - 查询《质量改善案例知识库》Top-3 历史案例
+Step3: 方案生成 - 匹配历史案例 → 定制改进方案，每条措施含执行步骤/预估效果/风险提示
 
-严格以JSON数组格式返回，不要有其他文字：
+## Output Format (严格 JSON 数组)
 [
   {
-    "priority": "P0-紧急|P1-重要|P2-一般",
-    "action": str,
-    "responsible": str,
-    "estimated_cost": int,
-    "expected_effect": str,
-    "implementation_time": str,
-    "roi": str
+    "target_cause": "对应根因（≤ 30 字）",
+    "measures": [
+      {
+        "step": 1,
+        "action": "具体措施（≤ 60 字）",
+        "expected_effect": "预估提升效果（如：良品率 +5%）",
+        "risk": "风险提示（≤ 30 字）",
+        "priority": "HIGH|MEDIUM|LOW"
+      }
+    ],
+    "reference_case": "历史案例摘要（≤ 60 字）",
+    "uncertainty_note": "⚠ 低置信度，建议人工复核"
   }
-]"""
+]
 
-    case_lines = '\n'.join(case_texts) if case_texts else '无历史案例'
+## Constraints
+- 改进方案条数与根因数量对应（1:1 映射）
+- 禁止生成无历史案例支撑的措施（标注为"待验证"而非杜撰）
+- low_confidence_flag=true 时，每条方案必须含 uncertainty_note"""
+
+    case_lines = '\n'.join(case_texts) if case_texts else '无历史改善案例'
     human_prompt = f"""基于以下根因分析结果，生成改进方案：
 
 根因列表：
@@ -466,7 +514,7 @@ def decision_agent_node(state: QualityAgentState) -> dict:
 
 设备：{equipment or '未指定'}
 
-参考历史案例：
+参考历史改善案例：
 {case_lines}
 
 {warning_text}"""
@@ -496,22 +544,137 @@ def decision_agent_node(state: QualityAgentState) -> dict:
 
 def output_merger_node(state: QualityAgentState) -> dict:
     """输出整合节点: 汇总三个 Agent 的结果"""
+    diagnosis = state.get("diagnosis_result", [])
+    improvement = state.get("improvement_plan", [])
+    confidence = state.get("diagnosis_confidence", 0)
+    low_conf = state.get("low_confidence_flag", False)
+
     final_output = {
         "statistics": state.get("statistics", {}),
         "charts": state.get("charts", []),
-        "diagnosis_result": state.get("diagnosis_result", []),
-        "diagnosis_confidence": state.get("diagnosis_confidence", 0),
-        "improvement_plan": state.get("improvement_plan", []),
+        "diagnosis_result": diagnosis,
+        "root_causes": diagnosis,  # 向后兼容
+        "diagnosis_confidence": confidence,
+        "improvement_plan": improvement,
         "estimated_improvement": state.get("estimated_improvement", ""),
-        "low_confidence_warning": state.get("low_confidence_flag", False),
+        "low_confidence_warning": low_conf,
         "diagnosis_valid": state.get("diagnosis_valid", False),
+        "alerts": [],
+    }
+
+    # 低置信度警告
+    if low_conf:
+        final_output["alerts"].append("⚠ 本次诊断置信度较低，建议人工复核")
+
+    # 提取知识沉淀候选内容
+    knowledge_candidate = {
+        "anomaly_pattern": {
+            "fields": state.get("statistics", {}).get("numeric_stats", {}),
+            "root_causes": diagnosis,
+        },
+        "solution_case": {
+            "causes": [d.get("cause", d.get("root_cause", "")) for d in diagnosis],
+            "measures": improvement,
+            "risk_level": "HIGH" if low_conf else "MEDIUM",
+        },
+        "overall_confidence": confidence,
+        "low_confidence_flag": low_conf,
     }
 
     # 如果有错误信息也带上
     if state.get("error_message"):
         final_output["error_message"] = state["error_message"]
 
-    return {"final_output": final_output}
+    return {
+        "final_output": final_output,
+        "knowledge_candidate": knowledge_candidate,
+    }
+
+
+def knowledge_node(state: QualityAgentState) -> dict:
+    """知识沉淀节点: 从最终输出中提炼新知识，写入对应知识库"""
+    candidate = state.get("knowledge_candidate") or {}
+    overall_conf = candidate.get("overall_confidence", 0)
+    low_conf = candidate.get("low_confidence_flag", False)
+
+    # 沉淀规则
+    # ① overall_confidence >= 0.7 → 正式库
+    # ② low_confidence_flag=true → 待验证暂存区
+    # ③ 否则跳过
+    if low_conf or overall_conf < 0.7:
+        persist_target = "pending_kb"
+        should_persist = True
+        logging.info(f"[knowledge_node] 低置信度 ({overall_conf})，写入待验证暂存区")
+    elif overall_conf >= 0.7:
+        persist_target = "formal_kb"
+        should_persist = True
+        logging.info(f"[knowledge_node] 高置信度 ({overall_conf})，写入正式知识库")
+    else:
+        persist_target = "skip"
+        should_persist = False
+        logging.info(f"[knowledge_node] 置信度不足 ({overall_conf})，跳过沉淀")
+
+    # 构建知识条目
+    anomaly_pattern = candidate.get("anomaly_pattern", {})
+    solution_case = candidate.get("solution_case", {})
+
+    diagnosis_knowledge = {
+        "anomaly_feature": str(anomaly_pattern.get("fields", {}))[:200],
+        "root_causes": anomaly_pattern.get("root_causes", []),
+        "confidence": overall_conf,
+        "source": "auto_generated_by_agent2",
+    }
+
+    improvement_case = {
+        "problem": str(solution_case.get("causes", []))[:200],
+        "solution": str(solution_case.get("measures", []))[:200],
+        "risk_level": solution_case.get("risk_level", "MEDIUM"),
+        "source": "auto_generated_by_agent3",
+    }
+
+    import uuid
+    kb_write_status = "SKIP"
+    case_id = str(uuid.uuid4())[:8]
+
+    if persist_target == "pending_kb":
+        # 写入待验证暂存区
+        kb_text = f"异常特征: {diagnosis_knowledge['anomaly_feature']} 根因: {diagnosis_knowledge['root_causes']}"
+        kb_meta = {
+            "case_id": f"PENDING_{case_id}",
+            "title": "待验证诊断案例",
+            "problem": improvement_case["problem"],
+            "root_cause": str(diagnosis_knowledge["root_causes"]),
+            "solution": improvement_case["solution"],
+            "category": "pending",
+            "confidence": overall_conf,
+        }
+        success = write_to_pending_kb(kb_text, kb_meta)
+        kb_write_status = "PENDING" if success else "PENDING_FAIL"
+
+    elif persist_target == "formal_kb":
+        # 写入正式诊断知识库
+        kb_text = f"异常特征: {diagnosis_knowledge['anomaly_feature']} 根因: {diagnosis_knowledge['root_causes']}"
+        kb_meta = {
+            "case_id": f"KB_{case_id}",
+            "title": "自动沉淀诊断案例",
+            "problem": improvement_case["problem"],
+            "root_cause": str(diagnosis_knowledge["root_causes"]),
+            "solution": improvement_case["solution"],
+            "category": "auto_generated",
+            "confidence": overall_conf,
+        }
+        success = write_to_diagnosis_kb(kb_text, kb_meta)
+        kb_write_status = "SUCCESS" if success else "FAIL"
+
+    return {
+        "knowledge_persisted": {
+            "should_persist": should_persist,
+            "persist_target": persist_target,
+            "diagnosis_knowledge": diagnosis_knowledge,
+            "improvement_case": improvement_case,
+            "kb_write_status": kb_write_status,
+        },
+    }
 
 
 # ======================== JSON 解析工具 ========================
@@ -546,16 +709,19 @@ def build_quality_graph() -> StateGraph:
     """构建 LangGraph StateGraph"""
     graph = StateGraph(QualityAgentState)
 
-    # 注册节点
+    # 注册节点（含新增 Supervisor 和 knowledge_node）
+    graph.add_node("supervisor", supervisor_node)
     graph.add_node("data_agent", data_agent_node)
     graph.add_node("validate_data", validate_data_node)
     graph.add_node("diagnosis_agent", diagnosis_agent_node)
     graph.add_node("validate_diagnosis", validate_diagnosis_node)
     graph.add_node("decision_agent", decision_agent_node)
     graph.add_node("output_merger", output_merger_node)
+    graph.add_node("knowledge_node", knowledge_node)
 
-    # 边
-    graph.set_entry_point("data_agent")
+    # 边: supervisor → data_agent → validate_data
+    graph.set_entry_point("supervisor")
+    graph.add_edge("supervisor", "data_agent")
     graph.add_edge("data_agent", "validate_data")
 
     # 条件边: validate_data → data_agent(重试) 或 diagnosis_agent(继续)
@@ -571,7 +737,8 @@ def build_quality_graph() -> StateGraph:
     graph.add_edge("diagnosis_agent", "validate_diagnosis")
     graph.add_edge("validate_diagnosis", "decision_agent")
     graph.add_edge("decision_agent", "output_merger")
-    graph.add_edge("output_merger", END)
+    graph.add_edge("output_merger", "knowledge_node")
+    graph.add_edge("knowledge_node", END)
 
     # Checkpointer (开发期用 MemorySaver)
     checkpointer = MemorySaver()
@@ -625,6 +792,8 @@ async def run_analysis(
         "estimated_improvement": None,
         "final_output": None,
         "error_message": None,
+        "knowledge_candidate": None,
+        "knowledge_persisted": None,
     }
 
     config = {"configurable": {"thread_id": "quality_analysis"}}
