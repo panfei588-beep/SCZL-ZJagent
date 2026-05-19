@@ -21,7 +21,9 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir --timeout 300 -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
+RUN pip install --no-cache-dir --timeout 600 --retries 5 -r requirements.txt \
+    -i https://pypi.tuna.tsinghua.edu.cn/simple/ \
+    --trusted-host pypi.tuna.tsinghua.edu.cn
 
 # 下载 MinerU 模型（pipeline 模式，失败不阻断构建）
 RUN python -m mineru.tools.download_models --backend pipeline 2>/dev/null; echo "MinerU model download done"
