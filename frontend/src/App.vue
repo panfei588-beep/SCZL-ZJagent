@@ -3,7 +3,7 @@
     <!-- Sidebar -->
     <aside class="sidebar">
       <div class="logo-container">
-        <h1 class="logo-title">CorpClaw</h1>
+        <img src="https://cdn.phototourl.com/free/2026-05-19-317de74c-4617-4c56-8c3d-f34fcb0d1f2a.png" alt="航天爱锐" class="logo-image">
         <p class="logo-subtitle">企业数字员工</p>
       </div>
       
@@ -66,29 +66,41 @@ const route = useRoute()
   flex-direction: column;
   flex-shrink: 0;
   z-index: var(--z-nav);
+  padding: 20px;
+  box-sizing: border-box;
 }
 
 .logo-container {
-  padding: 24px;
-  border-bottom: 1px solid var(--border-light);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: -2px;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f0f0f0;
+  padding-top: 10px;
 }
 
-.logo-title {
-  font-size: 20px;
-  color: #0045a5;
-  font-weight: 800;
-  margin: 0;
+.logo-image {
+  height: 65px;
+  width: auto;
+  display: block;
+  object-fit: contain;
 }
 
 .logo-subtitle {
-  font-size: 12px;
-  color: #909399;
-  margin: 4px 0 0;
+  font-size: 16px;
+  color: #606266;
+  font-weight: 500;
+  margin: 0;
+  letter-spacing: 0.5px;
 }
 
 .side-nav {
-  padding: 16px 12px;
+  display: flex;
+  flex-direction: column;
   flex: 1;
+  gap: 8px;
 }
 
 .nav-item {
@@ -96,17 +108,17 @@ const route = useRoute()
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  border-radius: 6px;
+  border-radius: 8px;
   color: #606266;
   cursor: pointer;
-  margin-bottom: 4px;
   transition: all 0.2s;
   font-size: 14px;
+  text-align: left;
 }
 
 .nav-item:hover {
-  background-color: var(--bg-light);
-  color: var(--primary);
+  background-color: #f0f4ff;
+  color: #0052d9;
 }
 
 .nav-item.active {
@@ -115,8 +127,7 @@ const route = useRoute()
 }
 
 .sidebar-footer {
-  padding: 16px 12px;
-  border-top: 1px solid var(--border-light);
+  margin-top: 20px;
 }
 
 .logout {

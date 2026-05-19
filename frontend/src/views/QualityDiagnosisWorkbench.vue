@@ -349,14 +349,195 @@
         <el-table-column prop="time" label="诊断时间" width="180" />
         <el-table-column prop="target" label="改善目标" min-width="200" />
         <el-table-column prop="records" label="采样条数" width="100" align="center" />
-        <el-table-column label="操作" width="120" fixed="right">
+        <el-table-column label="操作" width="200" fixed="right">
           <template #default="scope">
-            <el-button type="primary" link @click="loadHistory(scope.row)">查看详情</el-button>
+            <el-button type="primary" link @click="openExpertCard(scope.row)">专家卡片</el-button>
+            <el-button type="primary" link @click="loadHistory(scope.row)">详情</el-button>
           </template>
         </el-table-column>
       </el-table>
       <el-empty v-if="historyRecords.length === 0" description="暂无历史纪录" />
     </el-dialog>
+
+    <!-- Expert Card Dialog -->
+    <el-dialog
+      v-model="showExpertCard"
+      title="质量改善管理专家卡片"
+      width="440px"
+      class="expert-card-dialog"
+      append-to-body
+    >
+      <div v-if="selectedHistory" class="expert-card-container">
+        <div class="card-main">
+          <div class="card-top-bg"></div>
+          <div class="card-content">
+            <div class="card-header-expert">
+              <div class="expert-identity">
+                <div class="expert-avatar-box">
+                  <el-icon :size="32" color="#fff"><Postcard /></el-icon>
+                </div>
+                <div class="expert-name-box">
+                  <div class="expert-label">质量改善管理专家</div>
+                  <div class="expert-status"><span class="dot-online"></span> 在线诊断中</div>
+                </div>
+              </div>
+              <div class="card-id">#{{ selectedHistory.id || 'N/A' }}</div>
+            </div>
+
+            <div class="card-body-expert">
+              <div class="card-field">
+                <div class="field-label">诊断时间</div>
+                <div class="field-value">{{ selectedHistory.time }}</div>
+              </div>
+              
+              <div class="card-field">
+                <div class="field-label">改善目标</div>
+                <div class="field-value highlight">{{ selectedHistory.target }}</div>
+              </div>
+
+              <div class="card-stats-expert">
+                <div class="stat-box">
+                  <div class="stat-num">{{ selectedHistory.records }}</div>
+                  <div class="stat-label">测点采样数</div>
+                </div>
+                <div class="stat-box">
+                  <div class="stat-num danger-num">{{ selectedHistory.diagnosis?.root_causes?.length || 0 }}</div>
+                  <div class="stat-label">根因异常项</div>
+                </div>
+              </div>
+
+              <div class="card-diagnosis-preview">
+                <div class="preview-label">诊断关键结论:</div>
+                <div v-for="cause in selectedHistory.diagnosis?.root_causes?.slice(0, 2)" :key="cause.rank" class="preview-item">
+                  <el-icon :size="14" color="#409eff"><Cpu /></el-icon>
+                  <span>{{ cause.cause }}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="card-footer-expert">
+              <el-button type="primary" class="w-full btn-expert" @click="viewFullDiagnosis(selectedHistory)">
+                查看完整诊断画布
+              </el-button>
+              <div class="footer-hint">航天爱锐 · 数字员工专家系统</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </el-dialog>
+
+    <!-- Hidden Report Template for PDF Generation -->
+    <div id="pdf-report-content" class="hidden-pdf-content">
+      <div class="pdf-container">
+        <!-- PDF Header -->
+        <div class="pdf-header">
+           <div class="pdf-logo-area">
+             <img src="https://cdn.phototourl.com/free/2026-05-19-317de74c-4617-4c56-8c3d-f34fcb0d1f2a.png" class="pdf-logo" />
+             <div class="pdf-title-group">
+               <h1 class="pdf-main-title">智能化质量诊断报告</h1>
+               <p class="pdf-sub-title">AEROSPACE AI QUALITY DIAGNOSIS REPORT</p>
+             </div>
+           </div>
+           <div class="pdf-header-meta">
+             <div class="meta-item"><span class="label">报告编号：</span><span class="value">IPR-{{ new Date().getTime().toString().slice(-8) }}</span></div>
+             <div class="meta-item"><span class="label">生成日期：</span><span class="value">{{ new Date().toLocaleString() }}</span></div>
+           </div>
+        </div>
+
+        <!-- Section 0: Target -->
+        <div class="pdf-section">
+          <div class="section-header-pdf">改善目标概要</div>
+          <div class="target-card-pdf">
+            <div class="target-text-pdf">
+              {{ filter.improvementTarget || '通用性能优化与质量稳定性提升' }}
+            </div>
+            <div class="target-meta-pdf">
+              诊断单位：航天爱锐 · 企业数字员工系统
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 1: Data Analysis -->
+        <div class="pdf-section">
+          <div class="section-header-pdf">1. AI 数据解析报告</div>
+          <table class="pdf-table">
+            <thead>
+              <tr>
+                <th>检测指标</th>
+                <th>样本总数</th>
+                <th>统计均值</th>
+                <th>最大/最小值</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in itemStatsTable.slice(0, 8)" :key="item.key">
+                <td>{{ item.metric }}</td>
+                <td>{{ item.count }}</td>
+                <td>{{ item.mean }}</td>
+                <td>{{ item.max }} / {{ item.min }}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="pdf-data-summary">
+            ※ 基于 {{ totalRecords }} 条质检记录深度计算，整体标准差为 {{ stdDev.toFixed(4) }}。
+          </div>
+        </div>
+
+        <!-- Section 2: Diagnosis -->
+        <div class="pdf-section">
+          <div class="section-header-pdf">2. AI 专家深度诊断结论</div>
+          <div class="pdf-diagnosis-list">
+            <div v-for="cause in streamingDiagnosisResult" :key="cause.rank" class="pdf-cause-item">
+              <div class="pdf-cause-header">
+                <span class="pdf-cause-rank">原因 {{ cause.rank }}</span>
+                <span class="pdf-cause-name">{{ cause.cause }}</span>
+                <span class="pdf-cause-conf">置信度: {{ (cause.confidence * 100).toFixed(0) }}%</span>
+              </div>
+              <div class="pdf-cause-body">
+                <p><strong>影响分析：</strong>{{ cause.influence }}</p>
+                <div class="pdf-evidence-row" v-if="cause.evidence?.length > 0">
+                  <strong>诊断依据：</strong>
+                  <span v-for="(ev, idx) in cause.evidence" :key="idx" class="pdf-ev-tag">{{ ev }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 3: Solutions -->
+        <div class="pdf-section">
+          <div class="section-header-pdf">3. 智能化改进建议方案</div>
+          <table class="pdf-table secondary">
+            <thead>
+              <tr>
+                <th>级别</th>
+                <th>改进策略项</th>
+                <th>协同部门</th>
+                <th>预期产出</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="sol in solutions" :key="sol.action">
+                <td>{{ sol.priority }}</td>
+                <td>{{ sol.action }}</td>
+                <td>{{ sol.responsible }}</td>
+                <td>{{ sol.expected_effect }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- PDF Footer -->
+        <div class="pdf-footer">
+          <div class="pdf-footer-line"></div>
+          <div class="pdf-footer-content">
+            <div class="pdf-footer-left">航天爱锐 (Aerospace AI) - 质量改善管理专家系统</div>
+            <div class="pdf-footer-right">第 1 页 / 共 1 页</div>
+          </div>
+           <p class="pdf-footer-caveat">注：本报告由航天爱锐 AI 数字员工自动生成，仅供生产改进参考。</p>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -379,11 +560,13 @@ import { useRouter } from 'vue-router'
 import ReportPreviewModal from './components/ReportPreviewModal.vue'
 import { 
   Upload, Cpu, PieChart, CircleCheck, ArrowLeft, ArrowRight, Document,
-  UploadFilled, Check, Download, Loading, View, Odometer, Connection, Management 
+  UploadFilled, Check, Download, Loading, View, Odometer, Connection, Management, Postcard 
 } from '@element-plus/icons-vue'
 import { ElMessage, ElLoading } from 'element-plus'
 import * as echarts from 'echarts'
 import Chart from 'chart.js/auto'
+import { jsPDF } from 'jspdf'
+import html2canvas from 'html2canvas'
 
 const router = useRouter()
 const currentStep = ref(0)
@@ -393,7 +576,62 @@ const scanProgress = ref(0)
 const diagnosticLogs = ref([])
 
 const showHistory = ref(false)
-const historyRecords = ref(JSON.parse(localStorage.getItem('quality_history') || '[]'))
+const showExpertCard = ref(false)
+const selectedHistory = ref(null)
+
+// Initialize with 10 mock records
+const getMockHistory = () => {
+  const records = []
+  const targets = ['提升良率至99%', '减少压降异常', '优化材料韧性', '控制温漂偏差', '缩短检测周期', '提高一致性', '降低重复磨损', '优化涂层厚度', '提升耐压性能', '改善表面粗糙度']
+  const dates = ['2026-05-18 10:24:12', '2026-05-17 14:15:22', '2026-05-16 09:12:45', '2026-05-15 16:30:10', '2026-05-14 11:45:33', '2026-05-13 13:20:55', '2026-05-12 15:10:21', '2026-05-11 08:35:48', '2026-05-10 17:50:12', '2026-05-09 12:05:30']
+  
+  for (let i = 0; i < 10; i++) {
+    const dataCount = 20 + Math.floor(Math.random() * 20)
+    const mockData = []
+    for (let j = 0; j < dataCount; j++) {
+      mockData.push({
+        fileName: 'MOCK_DATA_V01.xlsx',
+        file_name: 'MOCK_DATA_V01.xlsx',
+        '文件名': 'MOCK_DATA_V01.xlsx',
+        metric: '密封性能',
+        '检测项': '密封性能',
+        value: (0.02 + Math.random() * 0.01).toFixed(4),
+        '实测值': (0.02 + Math.random() * 0.01).toFixed(4),
+        '正阀编号': `V-${1000 + j}`,
+        sample: (0.02 + Math.random() * 0.01).toFixed(4)
+      })
+    }
+
+    records.push({
+      id: `H-${1000 + i}`,
+      time: dates[i],
+      target: targets[i],
+      focusPoints: ['mean_diff', 'process_capability'],
+      records: dataCount,
+      data: mockData,
+      thoughts: ['历史数据加载中...', '检索AI诊断知识图谱...', '还原核心异常根因'],
+      diagnosis: {
+        root_causes: [
+          { rank: 1, cause: '环境温度波动干扰', influence: '导致电阻值产生系统性正向偏差', confidence: 0.92, category: '环境', evidence: ['环境湿度超标', '温度持续上涨'] },
+          { rank: 2, cause: '关键工位参数设置不当', influence: '影响响应时间的一致性', confidence: 0.85, category: '工艺', evidence: ['气源压力波动', '响应时间延后'] }
+        ]
+      },
+      solutions_data: [
+        { priority: '紧急-P0', action: '调整恒温恒湿控制器参数', responsible: '动力保障部', expected_effect: '降低 80% 环境偏差', implementation_time: '1天' },
+        { priority: '重要-P1', action: '校准关键工位气源压力阀', responsible: '生产部', expected_effect: '提升响应时间一致性', implementation_time: '2天' }
+      ]
+    })
+  }
+  return records
+}
+
+const localHistory = JSON.parse(localStorage.getItem('quality_history') || '[]')
+const historyRecords = ref(localHistory.length > 0 ? localHistory : getMockHistory())
+
+const openExpertCard = (row) => {
+  selectedHistory.value = row
+  showExpertCard.value = true
+}
 
 const isDiagnosisStreaming = ref(false)
 const diagnosisThoughts = ref([])
@@ -451,7 +689,8 @@ const itemStatsTable = computed(() => {
   uploadedData.value.forEach(record => {
     // Group by both file and metric to satisfy user request
     const fName = record.fileName || record.file_name || record['文件名'] || '未知文件'
-    const metric = record.检测项 || record['检测项'] || '默认指标'
+    // Ensure we capture all possible metric keys
+    const metric = record.检测项 || record['检测项'] || record.metric || record.metric_name || '默认指标'
     const groupKey = `${fName} - ${metric}`
     
     if (!groups[groupKey]) {
@@ -459,10 +698,10 @@ const itemStatsTable = computed(() => {
         name: fName,
         metric: metric,
         values: [],
-        sample: record.实测值 || record['实测值'] || '0.0' // Capture a sample
+        sample: record.实测值 || record['实测值'] || record.value || '0.0' // Capture a sample
       }
     }
-    const val = parseFloat(record.实测值 || record['实测值'])
+    const val = parseFloat(record.实测值 || record['实测值'] || record.value)
     if (!isNaN(val)) {
       groups[groupKey].values.push(val)
     }
@@ -537,9 +776,9 @@ const stdDev = computed(() => Math.sqrt(variance.value))
 const initSamplingCharts = () => {
   if (uploadedData.value.length === 0) return
 
-  const values = uploadedData.value.map(r => parseFloat(r.实测值)).filter(v => !isNaN(v))
+  const values = uploadedData.value.map(r => parseFloat(r.实测值 || r['实测值'] || r.value || 0)).filter(v => !isNaN(v))
   const labels = uploadedData.value.map((r, i) => {
-    return r.正阀编号 || r.产品编号 || `V-${1000 + i}`
+    return r.正阀编号 || r['正阀编号'] || r.product_id || r.productId || `V-${1000 + i}`
   })
   const mean = meanValue.value
   const sd = stdDev.value
@@ -1472,7 +1711,72 @@ const getTagType = (cat) => {
 }
 
 const createWorkOrder = (sol) => ElMessage.success(`工单已派发至：${sol.responsible}`)
-const exportReport = () => ElMessage.success('方案报告已生成并自动下载')
+const exportReport = async () => {
+  const loading = ElLoading.service({
+    lock: true,
+    text: '正在生成高保真诊断报告 PDF...',
+    background: 'rgba(255, 255, 255, 0.8)'
+  })
+
+  try {
+    const reportElement = document.getElementById('pdf-report-content')
+    if (!reportElement) {
+      throw new Error('找不到报告模版元素')
+    }
+
+    // Set visibility for capture
+    const originalStyle = reportElement.style.cssText
+    reportElement.style.position = 'absolute'
+    reportElement.style.left = '0'
+    reportElement.style.top = '0'
+    reportElement.style.zIndex = '-1000'
+    reportElement.style.display = 'block'
+
+    const canvas = await html2canvas(reportElement, {
+      scale: 2,
+      useCORS: true,
+      logging: false,
+      backgroundColor: '#ffffff'
+    })
+
+    // Restore original style
+    reportElement.style.cssText = originalStyle
+
+    const imgData = canvas.toDataURL('image/png')
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    })
+
+    const imgWidth = 210
+    const imgHeight = (canvas.height * imgWidth) / canvas.width
+    
+    // Add image to PDF - handle multi-page if necessary
+    let heightLeft = imgHeight
+    let position = 0
+    
+    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+    heightLeft -= 297
+
+    while (heightLeft >= 0) {
+      position = heightLeft - imgHeight
+      pdf.addPage()
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+      heightLeft -= 297
+    }
+
+    const filename = `质量诊断报告_${filter.value.improvementTarget?.substring(0, 8) || '分析报告'}_${new Date().getTime()}.pdf`
+    pdf.save(filename)
+    
+    ElMessage.success('诊断报告生成成功，已开始下载')
+  } catch (error) {
+    console.error('PDF Export Error:', error)
+    ElMessage.error('报表生成失败，请稍后重试')
+  } finally {
+    loading.close()
+  }
+}
 const previewReport = () => ElMessage.info('正在加载报告预览容器...')
 
 const archiveHistory = () => {
@@ -1487,13 +1791,38 @@ const archiveHistory = () => {
 }
 
 const loadHistory = (row) => {
-  uploadedData.value = row.data
-  diagnosisResult.value = row.diagnosis
-  solutions.value = row.solutions_data
-  streamingDiagnosisResult.value = row.diagnosis ? row.diagnosis.root_causes : []
+  uploadedData.value = JSON.parse(JSON.stringify(row.data || []))
+  diagnosisResult.value = JSON.parse(JSON.stringify(row.diagnosis || null))
+  solutions.value = JSON.parse(JSON.stringify(row.solutions_data || []))
+  streamingDiagnosisResult.value = diagnosisResult.value ? diagnosisResult.value.root_causes : []
+  diagnosisThoughts.value = row.thoughts || ['数据加载完成', '正在解析历史诊断路径', '深度同步核心根因']
+  filter.value.improvementTarget = row.target
+  filter.value.focusPoints = row.focusPoints || ['mean_diff', 'process_capability']
   currentStep.value = 1
+  nextTick(() => {
+    initSamplingCharts()
+    initPortraitCharts()
+  })
   showHistory.value = false
   ElMessage.success('已加载历史纪录')
+}
+
+const viewFullDiagnosis = (row) => {
+  uploadedData.value = JSON.parse(JSON.stringify(row.data || []))
+  diagnosisResult.value = JSON.parse(JSON.stringify(row.diagnosis || null))
+  solutions.value = JSON.parse(JSON.stringify(row.solutions_data || []))
+  streamingDiagnosisResult.value = diagnosisResult.value ? diagnosisResult.value.root_causes : []
+  diagnosisThoughts.value = row.thoughts || ['数据加载完成', '正在解析历史诊断路径', '深度同步核心根因']
+  filter.value.improvementTarget = row.target
+  filter.value.focusPoints = row.focusPoints || ['mean_diff', 'process_capability']
+  currentStep.value = 2
+  nextTick(() => {
+    initSamplingCharts()
+    initPortraitCharts()
+  })
+  showExpertCard.value = false
+  showHistory.value = false
+  ElMessage.success('已进入诊断分析画布')
 }
 
 const reset = () => {
@@ -1507,6 +1836,218 @@ const reset = () => {
 </script>
 
 <style scoped>
+/* Hidden content for PDF generation */
+.hidden-pdf-content {
+  position: fixed;
+  left: -9999px;
+  top: 0;
+  width: 794px; /* A4 width in pixels at 96 DPI */
+  background-color: white;
+  color: #333;
+  font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+  z-index: -1000;
+}
+
+.pdf-container {
+  padding: 40px;
+}
+
+.pdf-header {
+  border-bottom: 2px solid #0052d9;
+  padding-bottom: 20px;
+  margin-bottom: 30px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+.pdf-logo-area {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.pdf-logo {
+  height: 50px;
+  width: auto;
+}
+
+.pdf-main-title {
+  margin: 0;
+  font-size: 24px;
+  color: #0052d9;
+  letter-spacing: 1px;
+}
+
+.pdf-sub-title {
+  margin: 2px 0 0;
+  font-size: 10px;
+  color: #666;
+  text-transform: uppercase;
+}
+
+.pdf-header-meta {
+  text-align: right;
+  font-size: 12px;
+  color: #666;
+}
+
+.meta-item {
+  margin-bottom: 4px;
+}
+
+.pdf-section {
+  margin-bottom: 32px;
+}
+
+.section-header-pdf {
+  font-size: 16px;
+  font-weight: bold;
+  color: #1e293b;
+  border-left: 4px solid #0052d9;
+  padding-left: 12px;
+  margin-bottom: 16px;
+}
+
+.target-card-pdf {
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  padding: 20px;
+  border-radius: 4px;
+}
+
+.target-text-pdf {
+  font-size: 18px;
+  font-weight: bold;
+  color: #0052d9;
+  margin-bottom: 10px;
+}
+
+.target-meta-pdf {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.pdf-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 12px;
+}
+
+.pdf-table th {
+  background-color: #f1f5f9;
+  color: #475569;
+  text-align: left;
+  padding: 10px;
+  font-size: 13px;
+  border: 1px solid #e2e8f0;
+}
+
+.pdf-table td {
+  padding: 10px;
+  font-size: 13px;
+  border: 1px solid #e2e8f0;
+}
+
+.pdf-table.secondary th {
+  background-color: #eff6ff;
+}
+
+.pdf-data-summary {
+  font-size: 11px;
+  color: #64748b;
+  font-style: italic;
+}
+
+.pdf-diagnosis-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.pdf-cause-item {
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.pdf-cause-header {
+  background-color: #fef2f2;
+  padding: 10px 15px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pdf-cause-rank {
+  font-weight: bold;
+  color: #dc2626;
+  font-size: 14px;
+}
+
+.pdf-cause-name {
+  font-weight: bold;
+  flex: 1;
+  font-size: 15px;
+}
+
+.pdf-cause-conf {
+  font-size: 12px;
+  color: #dc2626;
+  background: white;
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid #fecaca;
+}
+
+.pdf-cause-body {
+  padding: 15px;
+  font-size: 13px;
+  color: #475569;
+}
+
+.pdf-evidence-row {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.pdf-ev-tag {
+  background-color: #f0fdf4;
+  color: #16a34a;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid #bbf7d0;
+  font-size: 11px;
+}
+
+.pdf-footer {
+  margin-top: 50px;
+  text-align: center;
+}
+
+.pdf-footer-line {
+  height: 1px;
+  background-color: #e2e8f0;
+  margin-bottom: 15px;
+}
+
+.pdf-footer-content {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #94a3b8;
+  margin-bottom: 10px;
+}
+
+.pdf-footer-caveat {
+  font-size: 9px;
+  color: #cbd5e1;
+  margin: 0;
+}
+
 .workbench {
   min-height: 100%;
   background-color: #f5f7fa;
@@ -2122,6 +2663,199 @@ const reset = () => {
   left: 50%;
   transform: translateX(-50%);
   z-index: 10;
+}
+
+/* Expert Card Styles */
+.expert-card-container {
+  padding: 10px;
+}
+
+.card-main {
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  border: 1px solid #f0f0f0;
+}
+
+.card-top-bg {
+  height: 120px;
+  background: linear-gradient(135deg, #0052d9 0%, #002266 100%);
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 0;
+}
+
+.card-content {
+  position: relative;
+  z-index: 1;
+  padding: 24px;
+  padding-top: 32px;
+}
+
+.card-header-expert {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+}
+
+.expert-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.expert-avatar-box {
+  width: 56px;
+  height: 56px;
+  background: #2b65d9;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.expert-name-box {
+  color: #fff;
+}
+
+.expert-label {
+  font-size: 18px;
+  font-weight: 700;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  line-height: 1.4;
+}
+
+.expert-status {
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  opacity: 0.9;
+  margin-top: 4px;
+}
+
+.dot-online {
+  width: 6px;
+  height: 6px;
+  background: #52c41a;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.card-id {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: monospace;
+}
+
+.card-body-expert {
+  margin-top: 28px;
+}
+
+.card-field {
+  margin-bottom: 16px;
+}
+
+.field-label {
+  font-size: 12px;
+  color: #909399;
+  margin-bottom: 4px;
+}
+
+.field-value {
+  font-size: 15px;
+  color: #303133;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.field-value.highlight {
+  color: #0052d9;
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.card-stats-expert {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 24px 0;
+  background: #f8faff;
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid #eef2ff;
+}
+
+.stat-box {
+  text-align: center;
+}
+
+.stat-num {
+  font-size: 24px;
+  font-weight: 800;
+  color: #1e293b;
+}
+
+.stat-num.danger-num {
+  color: #ef4444;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.card-diagnosis-preview {
+  background: #fff;
+  border: 1px solid #f1f5f9;
+  padding: 12px;
+  border-radius: 8px;
+}
+
+.preview-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 8px;
+}
+
+.preview-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  color: #334155;
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+
+.card-footer-expert {
+  margin-top: 32px;
+}
+
+.btn-expert {
+  height: 48px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.footer-hint {
+  text-align: center;
+  margin-top: 12px;
+  font-size: 11px;
+  color: #cbd5e1;
 }
 
 .report-preview-grid {
