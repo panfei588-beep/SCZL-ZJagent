@@ -88,7 +88,7 @@
         <!-- 中间报告内容 -->
         <div class="content-area" :class="{ 'no-sidebar': reportOutline.length === 0 }">
           <div class="report-content" ref="reportContentRef" @click="handleContentClick">
-            <div v-if="reportData.content" v-html="reportData.content" class="report-content-body"></div>
+            <div v-if="reportData.content" v-html="processedContent" class="report-content-body"></div>
             <el-empty v-else description="暂无报告内容" />
           </div>
         </div>
@@ -178,7 +178,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getReportDetail, downloadReport, regenerateReport, getDataSourceInfo } from '@/api/report'
 import { CircleCheck, Close, Download, Refresh, Loading, Box, Collection, Setting, Document } from '@element-plus/icons-vue'
@@ -195,6 +195,122 @@ const props = defineProps({
 const route = useRoute()
 const router = useRouter()
 const reportId = props.id || route?.params?.id || 'IP-001'
+
+// ✅ 处理报告内容
+const processedContent = computed(() => {
+  if (!reportData.value.content) return ''
+  
+  let content = reportData.value.content
+  
+  // 0. 清理表格：移除空数据列
+  try {
+    const parser = new DOMParser()
+    const doc = parser.parseFromString(content, 'text/html')
+    const tables = doc.querySelectorAll('table')
+    
+    tables.forEach(table => {
+      // 排除封面签名表 (包含编制单位等特征文字)
+      if (table.textContent.includes('编制单位') || table.textContent.includes('审核') || table.textContent.includes('批准')) {
+        return
+      }
+
+      const rows = Array.from(table.querySelectorAll('tr'))
+      if (rows.length <= 1) return 
+
+      // 1. 获取最大列数和空列索引
+      let maxCols = 0
+      rows.forEach(row => {
+        maxCols = Math.max(maxCols, row.cells.length)
+      })
+
+      const emptyColIndices = []
+      for (let j = 0; j < maxCols; j++) {
+        let allEmpty = true
+        for (let i = 0; i < rows.length; i++) {
+          const cell = rows[i].cells[j]
+          if (cell && cell.textContent.replace(/\u00a0/g, ' ').trim().length > 0) {
+            allEmpty = false
+            break
+          }
+        }
+        if (allEmpty) {
+          emptyColIndices.push(j)
+        }
+      }
+
+      // 2. 从后往前删除空列
+      for (let k = emptyColIndices.length - 1; k >= 0; k--) {
+        const colIndex = emptyColIndices[k]
+        rows.forEach(row => {
+          if (row.cells[colIndex]) {
+            row.deleteCell(colIndex)
+          }
+        })
+      }
+
+      // 3. 🛑 识别性能表并添加表头和标题
+      // 检查第一行第一列是否为 "1"，第二列是否为产品编号 (4-6位数字)
+      const firstDataRow = rows[0]
+      const firstCellText = firstDataRow.cells[0]?.textContent?.trim()
+      const secondCellText = firstDataRow.cells[1]?.textContent?.trim()
+      
+      if (firstCellText === '1' && /^\d{4,6}$/.test(secondCellText)) {
+        // 创建表头行
+        const headerRow = document.createElement('tr')
+        // 根据当前列数创建表头，通常为 7 列
+        const colCount = firstDataRow.cells.length
+        const headers = ['序号', '产品编号', '密封性', '绝缘电阻', '开启时间', '关闭时间', '额定流量', '重量']
+        
+        for (let i = 0; i < colCount; i++) {
+          const th = document.createElement('th')
+          th.textContent = headers[i] || `参数${i - 1}`
+          th.style.backgroundColor = '#FAFAFA'
+          th.style.fontWeight = '600'
+          th.style.border = '1px solid #E8E8E8'
+          th.style.padding = '8px 12px'
+          headerRow.appendChild(th)
+        }
+        
+        // 插入到表格最前面
+        table.insertBefore(headerRow, table.firstChild)
+        
+        // 在表格前添加标题
+        const titleDiv = document.createElement('div')
+        titleDiv.innerHTML = '<p style="font-weight: bold; font-size: 16px; margin-top: 24px; margin-bottom: 12px; text-align: left; color: #262626;">附表12.19 增压电磁阀性能表</p>'
+        table.parentNode.insertBefore(titleDiv, table)
+      }
+    })
+    content = doc.body.innerHTML
+  } catch (e) {
+    console.error('Table cleanup failed:', e)
+  }
+
+  // 1. 处理 4-12 位数字的产品编号 (如 25024, 8424)
+  // 排除已经在 span 标签内的，以及 HTML 属性中的
+  content = content.replace(/(?<!class="dynamic-data"[^>]*>)\b(\d{4,12})\b(?![^<]*>)/g, '<span class="product-number-blue">$1</span>')
+  
+  // 2. 处理 XX-0 这种型号
+  content = content.replace(/(?<!class="dynamic-data"[^>]*>)\b(XX-0)\b(?![^<]*>)/g, '<span class="product-number-blue">$1</span>')
+  
+  // 3. 处理表格中的数值 (所有表格单元格内的数值标记为蓝色)
+  content = content.replace(/(<td[^>]*>)([\s\S]*?)(<\/td>)/g, (match, openingTag, cellContent, closingTag) => {
+    // 排除已经在标签内的数字，以及 HTML 属性中的数字
+    const highlighted = cellContent.replace(/(?<!<[^>]*)\b(\d+\.?\d*)\b(?![^<]*>)/g, '<span class="product-number-blue">$1</span>')
+    return openingTag + highlighted + closingTag
+  })
+
+  // 4. 修复封面签名栏布局 (按照行合并左侧空白格)
+  // 移除那个带 rowspan=9 的空白单元格
+  content = content.replace(/<td[^>]*rowspan=9[^>]*>[\s\S]*?<\/td>/g, '')
+  // 将签名栏标签单元格的 colspan 从 4 增加到 5，以合并左侧移除的空间
+  const signatureLabels = ['编制单位', '编写', '校对', '审核', '复核', '批准']
+  signatureLabels.forEach(label => {
+    const reg = new RegExp(`(<td[^>]*${label}[^>]*colspan=)("?)4("?)`, 'g')
+    content = content.replace(reg, '$1$2 5 $3')
+  })
+
+  return content
+})
 
 // 报告数据
 const reportData = ref({
@@ -4981,6 +5097,38 @@ onMounted(() => {
         padding-bottom: 8px;
       }
 
+      // 报告内容 body 样
+      .report-content-body {
+        width: 100%;
+        overflow-x: auto;
+        box-sizing: border-box !important;
+        
+        * {
+          box-sizing: border-box !important;
+        }
+        
+        // 允许 Word 导出的 Section 容器保留其原有的布局逻辑，但防止过度溢出
+        :deep(.Section0) {
+          width: auto;
+          max-width: 100%;
+        }
+      }
+
+      :deep(h1) {
+        font-size: 24px;
+        font-weight: 600;
+        margin: 32px 0 16px 0;
+        text-align: center;
+      }
+
+      :deep(h2) {
+        font-size: 20px;
+        font-weight: 600;
+        margin: 28px 0 14px 0;
+        border-bottom: 2px solid #F0F0F0;
+        padding-bottom: 8px;
+      }
+
       :deep(h3) {
         font-size: 18px;
         font-weight: 500;
@@ -5005,23 +5153,52 @@ onMounted(() => {
 
       // 表格样式
       :deep(table) {
-        width: 100% !important;
-        table-layout: fixed !important;
+        width: 100% !important; 
+        max-width: 100% !important;
+        table-layout: auto !important; 
         border-collapse: collapse;
-        margin: 16px 0;
+        margin: 16px 0 !important;
+        border: 1px solid #E8E8E8 !important;
+        margin-left: 0 !important; 
+        margin-right: 0 !important;
+        box-sizing: border-box !important;
 
         th, td {
-          border: 1px solid #E8E8E8;
-          padding: 12px;
-          text-align: left;
-          word-break: break-all;
-          overflow-wrap: break-word;
+          border: 1px solid #E8E8E8 !important;
+          padding: 8px 12px !important;
+          word-break: normal !important; 
+          overflow-wrap: break-word !important; 
+          white-space: normal !important;
+          height: auto !important; 
+          text-align: center !important;
+        }
+
+        tr {
+          height: auto !important;
         }
 
         th {
           background: #FAFAFA;
           font-weight: 600;
         }
+      }
+
+      // 修复文字重叠问题
+      :deep(p) {
+        line-height: 1.6 !important; // 统一行高
+        margin: 8px 0 !important; // 统一间距
+        height: auto !important;
+        overflow: visible !important;
+      }
+
+      :deep(span) {
+        line-height: inherit !important;
+      }
+
+      // 产品编号高亮
+      :deep(.product-number-blue) {
+        color: #0050b3;
+        font-weight: 500;
       }
     }
   }
