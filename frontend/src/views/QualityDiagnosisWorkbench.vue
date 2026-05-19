@@ -249,7 +249,7 @@
                     <span class="confidence">置信度: {{ (cause.confidence * 100).toFixed(0) }}%</span>
                   </div>
                   <p class="cause-impact">{{ cause.influence }}</p>
-                  <div class="evidence-list">
+                  <div class="evidence-list" v-if="cause.evidence && cause.evidence.length > 0">
                     <div v-for="(ev, idx) in cause.evidence" :key="idx" class="evidence-tag">
                       <el-icon><Check /></el-icon> {{ ev }}
                     </div>
@@ -1628,7 +1628,11 @@ const startDiagnosticStreaming = () => {
 }
 
 const streamCauses = () => {
-  const causes = diagnosisResult.value.root_causes
+  const causes = diagnosisResult.value?.root_causes || diagnosisResult.value?.diagnosis_result || []
+  if (causes.length === 0) {
+    isDiagnosisStreaming.value = false
+    return
+  }
   let cIdx = 0
   const cTimer = setInterval(() => {
     if (cIdx < causes.length) {
