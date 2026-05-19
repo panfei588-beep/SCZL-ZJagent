@@ -1580,10 +1580,13 @@ const startAIScan = () => {
 
 const fetchDiagnosisResultBackground = async () => {
   try {
+    const payload = filePath.value
+      ? { file_paths: [filePath.value] }
+      : {}
     const res = await fetch('/api/diagnosis/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
+      body: JSON.stringify(payload),
     })
     if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`)
     const data = await res.json()
