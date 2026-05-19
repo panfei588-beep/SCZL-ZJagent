@@ -249,8 +249,8 @@
                     <span class="confidence">置信度: {{ (cause.confidence * 100).toFixed(0) }}%</span>
                   </div>
                   <p class="cause-impact">{{ cause.influence }}</p>
-                  <div class="evidence-list" v-if="cause.evidence && cause.evidence.length > 0">
-                    <div v-for="(ev, idx) in cause.evidence" :key="idx" class="evidence-tag">
+                  <div class="evidence-list" v-if="cause.evidence && getEvidenceArray(cause.evidence).length > 0">
+                    <div v-for="(ev, idx) in getEvidenceArray(cause.evidence)" :key="idx" class="evidence-tag">
                       <el-icon><Check /></el-icon> {{ ev }}
                     </div>
                   </div>
@@ -495,9 +495,9 @@
               </div>
               <div class="pdf-cause-body">
                 <p><strong>影响分析：</strong>{{ cause.influence }}</p>
-                <div class="pdf-evidence-row" v-if="cause.evidence?.length > 0">
+                <div class="pdf-evidence-row" v-if="getEvidenceArray(cause.evidence).length > 0">
                   <strong>诊断依据：</strong>
-                  <span v-for="(ev, idx) in cause.evidence" :key="idx" class="pdf-ev-tag">{{ ev }}</span>
+                  <span v-for="(ev, idx) in getEvidenceArray(cause.evidence)" :key="idx" class="pdf-ev-tag">{{ ev }}</span>
                 </div>
               </div>
             </div>
@@ -1669,7 +1669,13 @@ const initPortraitCharts = () => {
   // Predictor Chart
   const predictorDom = document.getElementById('predictorChart')
   if (predictorDom) {
-    const predictorChart = echarts.getInstanceByDom(predictorDom) || echarts.init(predictorDom)
+    // Dispose stale instance if it exists (from previous navigation)
+    const oldInstance = echarts.getInstanceByDom(predictorDom)
+    if (oldInstance) {
+      ecInstances.delete(oldInstance)
+      oldInstance.dispose()
+    }
+    const predictorChart = echarts.init(predictorDom)
     ecInstances.add(predictorChart)
     predictorChart.setOption({
       tooltip: { trigger: 'axis' },
@@ -1724,6 +1730,12 @@ const getTagType = (cat) => {
   if (cat === '设备') return 'danger'
   if (cat === '环境') return 'warning'
   return 'info'
+}
+
+const getEvidenceArray = (ev) => {
+  if (Array.isArray(ev)) return ev
+  if (typeof ev === 'string' && ev.trim()) return [ev]
+  return []
 }
 
 const createWorkOrder = (sol) => ElMessage.success(`工单已派发至：${sol.responsible}`)
