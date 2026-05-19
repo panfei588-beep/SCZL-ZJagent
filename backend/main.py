@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+import logging
 import os
 
 from api.upload import router as upload_router
@@ -8,6 +9,18 @@ from api.diagnosis import router as diagnosis_router
 from api.solution import router as solution_router
 from api.report import router as report_router
 from core.config import get_settings
+
+# 配置日志：同时输出到 stderr 和文件
+LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+os.makedirs(LOG_DIR, exist_ok=True)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler(os.path.join(LOG_DIR, "app.log"), encoding="utf-8"),
+    ],
+)
 
 settings = get_settings()
 

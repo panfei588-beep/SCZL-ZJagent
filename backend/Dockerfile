@@ -28,8 +28,8 @@ RUN python -m mineru.tools.download_models --backend pipeline 2>/dev/null; echo 
 
 COPY . .
 
-RUN mkdir -p uploads
+RUN mkdir -p uploads logs
 
 EXPOSE 8000
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--log-file", "logs/app.log"]

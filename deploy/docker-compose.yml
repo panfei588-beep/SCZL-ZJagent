@@ -111,6 +111,7 @@ services:
       - uploads_data:/app/uploads
       - charts_data:/app/charts
       - ../backend/data:/app/data:ro
+      - ./logs:/app/logs
     depends_on:
       milvus:
         condition: service_healthy
