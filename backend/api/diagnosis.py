@@ -7,7 +7,7 @@ router = APIRouter()
 
 
 class QualityAnalyzeRequest(BaseModel):
-    file_paths: list[str]
+    file_paths: Optional[list[str]] = None
     file_path: Optional[str] = None  # backward compat
     equipment: str = "3号精密磨床"
     days: int = 7
@@ -27,7 +27,15 @@ async def analyze(request: QualityAnalyzeRequest):
     try:
         paths = request.file_paths or ([request.file_path] if request.file_path else [])
         if not paths:
-            raise HTTPException(status_code=400, detail="未提供文件路径")
+            return {"code": 200, "message": "无文件路径，返回空结果", "data": {
+                "statistics": {},
+                "charts": [],
+                "diagnosis_result": [],
+                "diagnosis_confidence": 0,
+                "improvement_plan": [],
+                "estimated_improvement": "",
+                "low_confidence_warning": False,
+            }}
 
         user_params = {
             "equipment": request.equipment,
