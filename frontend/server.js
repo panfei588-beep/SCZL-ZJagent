@@ -134,6 +134,15 @@ async function startServer() {
     });
   });
 
+  // Global Error Handler
+  app.use((err, req, res, next) => {
+    console.error('Server Error:', err);
+    res.status(500).json({
+      code: 500,
+      message: err.message || 'Internal Server Error'
+    });
+  });
+
   // --- Vite Integration ---
 
   if (process.env.NODE_ENV !== 'production') {
