@@ -1515,6 +1515,10 @@ watch(currentStep, (newStep) => {
       }, 800)
     }
   } else if (newStep === 3) {
+    // 如果方案还没生成（自动模式下可能提前跳转），补触发一次
+    if (solutions.value.length === 0) {
+      handleGenerateSolutions()
+    }
     nextTick(() => {
       setTimeout(() => {
         initPortraitCharts()
