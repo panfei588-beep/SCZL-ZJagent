@@ -1580,7 +1580,11 @@ const startAIScan = () => {
 
 const fetchDiagnosisResultBackground = async () => {
   try {
-    const res = await fetch('/api/diagnosis/analyze', { method: 'POST' })
+    const res = await fetch('/api/diagnosis/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    })
     if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`)
     const data = await res.json()
     if (data.code === 200) {
@@ -1693,7 +1697,12 @@ const initPortraitCharts = () => {
 const handleGenerateSolutions = async () => {
   // No full-page mask, we show inline planning status in Step 2 instead
   try {
-    const res = await fetch('/api/solution/generate', { method: 'POST' })
+    const rootCauses = diagnosisResult.value?.root_causes || diagnosisResult.value?.diagnosis_result || []
+    const res = await fetch('/api/solution/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ root_causes: rootCauses }),
+    })
     if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`)
     const data = await res.json()
     if (data.code === 200) {
