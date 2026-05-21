@@ -28,6 +28,9 @@ RUN pip install --no-cache-dir --timeout 600 --retries 5 -r requirements.txt \
 # 下载 MinerU 模型（pipeline 模式，失败不阻断构建）
 RUN python -m mineru.tools.download_models --backend pipeline 2>/dev/null; echo "MinerU model download done"
 
+# 预下载 PaddleOCR 中文模型（失败不阻断构建）
+RUN python -c "from paddleocr import PaddleOCR; PaddleOCR(use_angle_cls=True, lang='ch', show_log=False)" 2>/dev/null; echo "PaddleOCR model download done"
+
 COPY . .
 
 RUN mkdir -p uploads logs
