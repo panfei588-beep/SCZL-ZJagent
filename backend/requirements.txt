@@ -21,6 +21,10 @@ mineru>=3.1.0
 # Fallback document/text extraction (when MinerU fails)
 PyPDF2>=3.0.0
 python-docx>=1.1.0
+PyMuPDF>=1.24.0
+paddleocr>=2.8.0
+paddlepaddle>=2.6.0
+Pillow>=10.0.0
 
 # Data Processing
 pandas>=2.3.3

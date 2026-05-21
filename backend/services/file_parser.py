@@ -157,25 +157,25 @@ async def _fallback_text_extraction(file_path: str) -> dict[str, Any]:
     """当 MinerU 完全失败时，用基础库提取文本（PyPDF2/PyMuPDF/纯文本）。"""
     ext = os.path.splitext(file_path)[1].lower()
 
-    # PDF: 尝试 PyPDF2 或 fitz (PyMuPDF)
+    # PDF: 优先用 PyMuPDF，再用 PyPDF2
     if ext == ".pdf":
-        for lib_name in ("PyPDF2", "fitz"):
+        for lib_name in ("fitz", "PyPDF2"):
             try:
-                if lib_name == "PyPDF2":
-                    from PyPDF2 import PdfReader
-                    reader = PdfReader(file_path)
-                    text = ""
-                    for page in reader.pages:
-                        text += page.extract_text() or ""
-                    if text.strip():
-                        return {"total_records": 1, "records": [{"raw_text": text.strip()[:2000]}]}
-                elif lib_name == "fitz":
+                if lib_name == "fitz":
                     import fitz
                     doc = fitz.open(file_path)
                     text = ""
                     for page in doc:
                         text += page.get_text() or ""
                     doc.close()
+                    if text.strip():
+                        return {"total_records": 1, "records": [{"raw_text": text.strip()[:2000]}]}
+                elif lib_name == "PyPDF2":
+                    from PyPDF2 import PdfReader
+                    reader = PdfReader(file_path)
+                    text = ""
+                    for page in reader.pages:
+                        text += page.extract_text() or ""
                     if text.strip():
                         return {"total_records": 1, "records": [{"raw_text": text.strip()[:2000]}]}
             except (ImportError, Exception) as e:
@@ -193,17 +193,24 @@ async def _fallback_text_extraction(file_path: str) -> dict[str, Any]:
         except (ImportError, Exception) as e:
             logging.debug(f"python-docx 提取失败: {e}")
 
-    # 图片: 尝试 pytesseract OCR
+    # 图片: 用 PaddleOCR（中文识别精度远优于 pytesseract）
     if ext in (".jpg", ".jpeg", ".png"):
         try:
-            import pytesseract
-            from PIL import Image
-            img = Image.open(file_path)
-            text = pytesseract.image_to_string(img, lang='chi_sim+eng')
+            from paddleocr import PaddleOCR
+            ocr = PaddleOCR(use_angle_cls=True, lang='ch', show_log=False)
+            result = ocr.ocr(file_path, cls=True)
+            lines = []
+            if result and result[0]:
+                for line in result[0]:
+                    if line and len(line) >= 2:
+                        text_info = line[1]
+                        if text_info and text_info[0]:
+                            lines.append(text_info[0])
+            text = "\n".join(lines)
             if text.strip():
                 return {"total_records": 1, "records": [{"raw_text": text.strip()[:2000]}]}
         except (ImportError, Exception) as e:
-            logging.debug(f"pytesseract OCR 失败: {e}")
+            logging.debug(f"PaddleOCR 失败: {e}")
 
     # 最后兜底: 返回文件基本信息
     file_size = os.path.getsize(file_path)
