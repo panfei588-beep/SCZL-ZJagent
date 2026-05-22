@@ -227,7 +227,7 @@ async def _parse_with_mineru_cli(file_path: str) -> dict[str, Any]:
     output_dir = os.path.join(os.path.dirname(file_path), "mineru_output")
     os.makedirs(output_dir, exist_ok=True)
 
-    cmd = f"mineru --input '{file_path}' --output '{output_dir}' --backend pipeline"
+    cmd = f"mineru -p '{file_path}' -o '{output_dir}' --backend pipeline"
     proc = await asyncio.create_subprocess_shell(
         cmd,
         stdout=asyncio.subprocess.PIPE,
