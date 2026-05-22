@@ -711,7 +711,7 @@ def knowledge_node(state: QualityAgentState) -> dict:
 # ======================== JSON 解析工具 ========================
 
 def _parse_llm_json(output: str) -> dict | list:
-    """robust JSON 解析，支持 markdown code block 和 brace 匹配"""
+    """robust JSON 解析，支持 markdown code block、brace 匹配和截断修复"""
     try:
         json_str = None
         match = re.search(r"```json\s*\n([\s\S]*?)\n```", output)
@@ -729,7 +729,16 @@ def _parse_llm_json(output: str) -> dict | list:
         if json_str is None:
             raise ValueError("未找到 JSON 格式输出")
 
-        return json.loads(json_str)
+        try:
+            return json.loads(json_str)
+        except json.JSONDecodeError:
+            # LLM 输出被截断时尝试用 json-repair 修复
+            try:
+                from json_repair import repair_json
+                repaired = repair_json(json_str)
+                return json.loads(repaired)
+            except Exception:
+                raise
     except Exception:
         raise ValueError(f"LLM 输出解析失败: {output[:200]}")
 
