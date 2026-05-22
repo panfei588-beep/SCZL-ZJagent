@@ -3,7 +3,7 @@
     <!-- Sidebar -->
     <aside class="sidebar">
       <div class="logo-container">
-        <img src="https://cdn.phototourl.com/free/2026-05-19-317de74c-4617-4c56-8c3d-f34fcb0d1f2a.png" alt="航天爱锐" class="logo-image">
+        <h1 class="logo-title">航天爱锐</h1>
         <p class="logo-subtitle">企业数字员工</p>
       </div>
       
@@ -14,7 +14,7 @@
         @click="router.push('/tools/quality-diagnosis')"
       >
         <el-icon><Document /></el-icon>
-        <span>质量改善管理专家</span>
+        <span>生产质量数字专家</span>
       </div>
       <div 
         class="nav-item" 
@@ -66,34 +66,39 @@ const route = useRoute()
   flex-direction: column;
   flex-shrink: 0;
   z-index: var(--z-nav);
-  padding: 20px;
+  padding: 10px;
   box-sizing: border-box;
 }
 
 .logo-container {
   display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: -2px;
-  margin-bottom: 24px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 6px;
   padding-bottom: 16px;
   border-bottom: 1px solid #f0f0f0;
   padding-top: 10px;
 }
 
-.logo-image {
-  height: 65px;
-  width: auto;
-  display: block;
-  object-fit: contain;
+.logo-title {
+  font-size: 28px;
+  font-weight: 800;
+  color: #0052d9;
+  margin: 10;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  letter-spacing: -0.5px;
+  line-height: 1.25;
+  margin-left: 16px; 
 }
 
 .logo-subtitle {
-  font-size: 16px;
+  font-size: 14px;
   color: #606266;
   font-weight: 500;
   margin: 0;
   letter-spacing: 0.5px;
+  margin-left: 16px; 
 }
 
 .side-nav {

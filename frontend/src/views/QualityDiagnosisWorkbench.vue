@@ -6,7 +6,7 @@
           <el-icon><ArrowLeft /></el-icon> 返回
         </span>
         <span class="divider">/</span>
-        <span class="current-page">质量改善管理专家</span>
+        <span class="current-page">生产质量数字专家</span>
       </div>
       <div class="header-actions-right ml-auto">
         <el-button @click="showHistory = true" :icon="Management" plain>历史改善记录</el-button>
@@ -194,13 +194,13 @@
 
             <!-- SPC Chart -->
             <div class="card chart-card">
-              <div class="card-header"><h3 class="card-title">增加电磁阀电阻质量历史波动</h3></div>
+              <div class="card-header"><h3 class="card-title">增压电磁阀电阻质量历史波动</h3></div>
               <div class="card-body"><div class="canvas-wrapper"><canvas id="controlChartCanvas"></canvas></div></div>
             </div>
 
             <!-- New Fluctuation Chart -->
             <div class="card chart-card">
-              <div class="card-header"><h3 class="card-title">增加电磁阀响应时间历史波动</h3></div>
+              <div class="card-header"><h3 class="card-title">增压电磁阀响应时间历史波动</h3></div>
               <div class="card-body"><div class="canvas-wrapper"><canvas id="controlChartCanvas2"></canvas></div></div>
             </div>
 
@@ -227,12 +227,12 @@
           </div>
           <div class="card-body">
             <!-- Streaming Thought Process -->
-            <div class="thought-process-wrapper mb-20" v-if="diagnosisThoughts.length > 0">
+            <div class="thought-process-wrapper mb-20" v-if="diagnosisThoughts.length > 0" ref="thoughtProcessContainer">
               <div class="thought-item" v-for="(thought, idx) in diagnosisThoughts" :key="idx">
                 <el-icon class="thought-icon"><Cpu /></el-icon>
                 <span class="thought-text">{{ thought }}</span>
               </div>
-              <div class="thought-item current-thought" v-if="isDiagnosisStreaming">
+              <div class="thought-item current-thought" v-if="isThinking && currentThought">
                 <el-icon class="is-loading"><Loading /></el-icon>
                 <span class="thought-text">{{ currentThought }}</span>
               </div>
@@ -249,8 +249,8 @@
                     <span class="confidence">置信度: {{ (cause.confidence * 100).toFixed(0) }}%</span>
                   </div>
                   <p class="cause-impact">{{ cause.influence }}</p>
-                  <div class="evidence-list" v-if="cause.evidence && getEvidenceArray(cause.evidence).length > 0">
-                    <div v-for="(ev, idx) in getEvidenceArray(cause.evidence)" :key="idx" class="evidence-tag">
+                  <div class="evidence-list">
+                    <div v-for="(ev, idx) in cause.evidence" :key="idx" class="evidence-tag">
                       <el-icon><Check /></el-icon> {{ ev }}
                     </div>
                   </div>
@@ -267,12 +267,8 @@
         <div class="action-footer">
           <el-button size="large" @click="goToStep(1)">返回可视化视图</el-button>
           
-          <div v-if="solutions.length === 0" class="auto-planning-hint ml-16">
-            <el-icon class="is-loading"><Loading /></el-icon>
-            AI 正在自动规划改进方案...
-          </div>
           <el-button 
-            v-else 
+            v-if="solutions.length > 0" 
             type="primary" 
             size="large" 
             @click="goToStep(3); nextTick(() => initPortraitCharts())"
@@ -286,15 +282,40 @@
       <div v-if="currentStep === 3" class="step-container animate-fade-in">
         <div class="card solution-card mb-24">
           <div class="card-header header-flex">
-            <h3 class="card-title">智能化质量体系改进规划</h3>
+            <h3 class="card-title">{{ isSolutionThoughtsBoxVisible ? 'AI 专家思考改进方案中...' : '智能化质量体系改进规划' }}</h3>
             <div class="header-actions">
-              <el-button type="primary" plain class="btn-sm" @click="exportReport">
+              <el-button type="primary" plain class="btn-sm" :disabled="isSolutionThoughtsBoxVisible" @click="exportReport">
                 <el-icon><Download /></el-icon> 下载诊断报告
               </el-button>
             </div>
           </div>
           <div class="card-body">
-            <el-table :data="solutions" class="custom-table" border stripe>
+            <!-- Solutions Thinking Process -->
+            <div class="solution-thought-wrapper mb-20" v-if="isSolutionThoughtsBoxVisible" ref="solutionThoughtContainer">
+              <div class="thought-item current-thought" v-if="isPreThinking">
+                <el-icon class="is-loading"><Loading /></el-icon>
+                <span class="thought-text" style="font-weight: 600; color: #0052d9;">AI专家正在思考质量改进方案...</span>
+              </div>
+              <template v-else>
+                <div class="thought-item" v-for="(thought, idx) in solutionThoughts" :key="idx">
+                  <el-icon class="thought-icon"><Cpu /></el-icon>
+                  <span class="thought-text">{{ thought }}</span>
+                </div>
+                <div class="thought-item current-thought" v-if="isSolutionThinking && currentSolutionThought">
+                  <el-icon class="is-loading"><Loading /></el-icon>
+                  <span class="thought-text">{{ currentSolutionThought }}</span>
+                </div>
+              </template>
+            </div>
+
+            <!-- Streaming solutions table -->
+            <el-table 
+              v-show="!isSolutionThoughtsBoxVisible"
+              :data="streamingSolutions" 
+              class="custom-table animate-fade-in" 
+              border 
+              stripe
+            >
               <el-table-column prop="priority" label="级别" width="100">
                 <template #default="scope">
                   <span :class="['priority-dot', scope.row.priority.includes('紧急') ? 'high' : 'medium']"></span>
@@ -309,7 +330,7 @@
           </div>
         </div>
 
-        <div class="card roi-card">
+        <div class="card roi-card anim-slide-up" v-if="isRoiVisible">
           <div class="card-header">
             <span class="header-tag">效益预估</span>
             <h3 class="card-title">方案实施预期 ROI 预测</h3>
@@ -362,62 +383,98 @@
     <!-- Expert Card Dialog -->
     <el-dialog
       v-model="showExpertCard"
-      title="质量改善管理专家卡片"
       width="440px"
       class="expert-card-dialog"
       append-to-body
+      :show-close="false"
     >
       <div v-if="selectedHistory" class="expert-card-container">
         <div class="card-main">
+          <!-- Close button -->
+          <div class="expert-card-close" @click="showExpertCard = false">
+            <el-icon><Close /></el-icon>
+          </div>
+
+          <!-- Futuristic Header with Grid dots background -->
           <div class="card-top-bg"></div>
           <div class="card-content">
             <div class="card-header-expert">
               <div class="expert-identity">
                 <div class="expert-avatar-box">
-                  <el-icon :size="32" color="#fff"><Postcard /></el-icon>
+                  <el-icon :size="28" color="#31e8ff"><Cpu /></el-icon>
+                  <span class="avatar-glow"></span>
                 </div>
                 <div class="expert-name-box">
-                  <div class="expert-label">质量改善管理专家</div>
-                  <div class="expert-status"><span class="dot-online"></span> 在线诊断中</div>
+                  <div class="expert-label">生产质量数字专家</div>
+                  <div class="expert-status">
+                    <span class="dot-online-pulse"></span>
+                    <span class="status-text">系统协同诊断中</span>
+                  </div>
                 </div>
               </div>
               <div class="card-id">#{{ selectedHistory.id || 'N/A' }}</div>
             </div>
 
+            <!-- Bento Card Grid -->
             <div class="card-body-expert">
-              <div class="card-field">
-                <div class="field-label">诊断时间</div>
-                <div class="field-value">{{ selectedHistory.time }}</div>
-              </div>
-              
-              <div class="card-field">
-                <div class="field-label">改善目标</div>
-                <div class="field-value highlight">{{ selectedHistory.target }}</div>
+              <!-- Grid Layout for Goal and Time -->
+              <div class="meta-bento-grid">
+                <div class="bento-meta-item">
+                  <div class="meta-label">改善目标 TARGET</div>
+                  <div class="meta-value-goal">
+                    <el-icon class="icon-target" :size="16"><CircleCheck /></el-icon>
+                    <span>{{ selectedHistory.target }}</span>
+                  </div>
+                </div>
+                
+                <div class="bento-meta-item">
+                  <div class="meta-label">诊断时间 DIAGNOSTIC TIME</div>
+                  <div class="meta-value-time">{{ selectedHistory.time }}</div>
+                </div>
               </div>
 
+              <!-- Metrics telemetry metrics -->
               <div class="card-stats-expert">
                 <div class="stat-box">
-                  <div class="stat-num">{{ selectedHistory.records }}</div>
+                  <div class="stat-num-container">
+                    <span class="stat-num">{{ selectedHistory.records }}</span>
+                    <span class="stat-unit">测点</span>
+                  </div>
                   <div class="stat-label">测点采样数</div>
                 </div>
+                <div class="stat-divider-vertical"></div>
                 <div class="stat-box">
-                  <div class="stat-num danger-num">{{ selectedHistory.diagnosis?.root_causes?.length || 0 }}</div>
+                  <div class="stat-num-container danger">
+                    <span class="stat-num danger-num">{{ selectedHistory.diagnosis?.root_causes?.length || 0 }}</span>
+                    <span class="stat-unit danger-unit">项</span>
+                  </div>
                   <div class="stat-label">根因异常项</div>
                 </div>
               </div>
 
+              <!-- Expert Diagnostic Conclusions Preview -->
               <div class="card-diagnosis-preview">
-                <div class="preview-label">诊断关键结论:</div>
-                <div v-for="cause in selectedHistory.diagnosis?.root_causes?.slice(0, 2)" :key="cause.rank" class="preview-item">
-                  <el-icon :size="14" color="#409eff"><Cpu /></el-icon>
-                  <span>{{ cause.cause }}</span>
+                <div class="preview-label">
+                  <span class="label-indicator"></span>
+                  诊断核心结论 EXPERT CONCLUSIONS
+                </div>
+                <div class="preview-list">
+                  <div v-for="(cause, index) in selectedHistory.diagnosis?.root_causes?.slice(0, 2)" :key="cause.rank || index" class="preview-item">
+                    <div class="item-index">0{{ index + 1 }}</div>
+                    <div class="item-text-content">
+                      <div class="item-cause-title">{{ cause.cause }}</div>
+                      <div class="item-cause-desc">{{ cause.influence }}</div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
 
+            <!-- Action footer drawer -->
             <div class="card-footer-expert">
               <el-button type="primary" class="w-full btn-expert" @click="viewFullDiagnosis(selectedHistory)">
-                查看完整诊断画布
+                <span>查看完整诊断画布</span>
+                <el-icon class="icon-arrow"><ArrowRight /></el-icon>
               </el-button>
               <div class="footer-hint">航天爱锐 · 数字员工专家系统</div>
             </div>
@@ -428,14 +485,15 @@
 
     <!-- Hidden Report Template for PDF Generation -->
     <div id="pdf-report-content" class="hidden-pdf-content">
-      <div class="pdf-container">
+      <!-- PAGE 1 -->
+      <div class="pdf-page page-1">
         <!-- PDF Header -->
         <div class="pdf-header">
            <div class="pdf-logo-area">
-             <img src="https://cdn.phototourl.com/free/2026-05-19-317de74c-4617-4c56-8c3d-f34fcb0d1f2a.png" class="pdf-logo" />
+             <span class="pdf-logo-text">航天爱锐</span>
              <div class="pdf-title-group">
                <h1 class="pdf-main-title">智能化质量诊断报告</h1>
-               <p class="pdf-sub-title">AEROSPACE AI QUALITY DIAGNOSIS REPORT</p>
+               <p class="pdf-sub-title">AERO-IRAY AI QUALITY DIAGNOSIS REPORT</p>
              </div>
            </div>
            <div class="pdf-header-meta">
@@ -458,8 +516,9 @@
         </div>
 
         <!-- Section 1: Data Analysis -->
-        <div class="pdf-section">
+        <div class="pdf-section" style="margin-bottom: 0;">
           <div class="section-header-pdf">1. AI 数据解析报告</div>
+
           <table class="pdf-table">
             <thead>
               <tr>
@@ -483,6 +542,29 @@
           </div>
         </div>
 
+        <!-- PDF Footer Page 1 -->
+        <div class="pdf-footer">
+          <div class="pdf-footer-line"></div>
+          <div class="pdf-footer-content">
+            <div class="pdf-footer-left">航天爱锐 - 生产数字专家系统</div>
+            <div class="pdf-footer-right">第 1 页 / 共 2 页</div>
+          </div>
+          <p class="pdf-footer-caveat">注：本报告由航天爱锐 AI 数字员工自动生成，仅供生产改进参考。</p>
+        </div>
+      </div>
+
+      <!-- PAGE 2 -->
+      <div class="pdf-page page-2">
+        <!-- PDF Header Page 2 (Compact) -->
+        <div class="pdf-header-compact">
+          <div class="pdf-logo-area">
+            <span class="pdf-logo-text" style="font-size: 18px;">航天爱锐</span>
+          </div>
+          <div class="pdf-title-compact" style="font-size: 13px; color: #64748b; font-weight: bold;">
+            智能化质量诊断报告 (续)
+          </div>
+        </div>
+
         <!-- Section 2: Diagnosis -->
         <div class="pdf-section">
           <div class="section-header-pdf">2. AI 专家深度诊断结论</div>
@@ -495,9 +577,9 @@
               </div>
               <div class="pdf-cause-body">
                 <p><strong>影响分析：</strong>{{ cause.influence }}</p>
-                <div class="pdf-evidence-row" v-if="getEvidenceArray(cause.evidence).length > 0">
+                <div class="pdf-evidence-row" v-if="cause.evidence?.length > 0">
                   <strong>诊断依据：</strong>
-                  <span v-for="(ev, idx) in getEvidenceArray(cause.evidence)" :key="idx" class="pdf-ev-tag">{{ ev }}</span>
+                  <span v-for="(ev, idx) in cause.evidence" :key="idx" class="pdf-ev-tag">{{ ev }}</span>
                 </div>
               </div>
             </div>
@@ -527,17 +609,20 @@
           </table>
         </div>
 
-        <!-- PDF Footer -->
+        <!-- PDF Footer Page 2 -->
         <div class="pdf-footer">
           <div class="pdf-footer-line"></div>
           <div class="pdf-footer-content">
-            <div class="pdf-footer-left">航天爱锐 (Aerospace AI) - 质量改善管理专家系统</div>
-            <div class="pdf-footer-right">第 1 页 / 共 1 页</div>
+            <div class="pdf-footer-left">航天爱锐 - 生产数字专家系统</div>
+            <div class="pdf-footer-right">第 2 页 / 共 2 页</div>
           </div>
-           <p class="pdf-footer-caveat">注：本报告由航天爱锐 AI 数字员工自动生成，仅供生产改进参考。</p>
+          <p class="pdf-footer-caveat">注：本报告由航天爱锐 AI 数字员工自动生成，仅供生产改进参考。</p>
         </div>
       </div>
     </div>
+
+    <!-- Hidden Run Chart Canvas for off-screen high-quality export rendering -->
+    <canvas id="hiddenRunChartCanvas" width="800" height="350" style="position: absolute; left: -9999px; top: -9999px; width: 800px; height: 350px;"></canvas>
   </div>
 </template>
 
@@ -546,6 +631,7 @@
 // These instances contain deep circular references that shouldn't be proxied by Vue or serialized
 const chartInstances = {
   run: null,
+  hiddenRun: null,
   control: null,
   control2: null,
   pareto: null,
@@ -560,7 +646,7 @@ import { useRouter } from 'vue-router'
 import ReportPreviewModal from './components/ReportPreviewModal.vue'
 import { 
   Upload, Cpu, PieChart, CircleCheck, ArrowLeft, ArrowRight, Document,
-  UploadFilled, Check, Download, Loading, View, Odometer, Connection, Management, Postcard 
+  UploadFilled, Check, Download, Loading, View, Odometer, Connection, Management, Postcard, Close
 } from '@element-plus/icons-vue'
 import { ElMessage, ElLoading } from 'element-plus'
 import * as echarts from 'echarts'
@@ -571,6 +657,8 @@ import html2canvas from 'html2canvas'
 const router = useRouter()
 const currentStep = ref(0)
 const isAutoMode = ref(false)
+const isHistoryMode = ref(false)
+const isSolutionsFlowCompleted = ref(false)
 const loading = ref(false)
 const scanProgress = ref(0)
 const diagnosticLogs = ref([])
@@ -588,17 +676,23 @@ const getMockHistory = () => {
   for (let i = 0; i < 10; i++) {
     const dataCount = 20 + Math.floor(Math.random() * 20)
     const mockData = []
+    const metrics = ['阻值-1和2', '阻值-3和4', '阻值-1和3', '阻值-1和4']
     for (let j = 0; j < dataCount; j++) {
-      mockData.push({
-        fileName: 'MOCK_DATA_V01.xlsx',
-        file_name: 'MOCK_DATA_V01.xlsx',
-        '文件名': 'MOCK_DATA_V01.xlsx',
-        metric: '密封性能',
-        '检测项': '密封性能',
-        value: (0.02 + Math.random() * 0.01).toFixed(4),
-        '实测值': (0.02 + Math.random() * 0.01).toFixed(4),
-        '正阀编号': `V-${1000 + j}`,
-        sample: (0.02 + Math.random() * 0.01).toFixed(4)
+      const valNum = 10000 + Math.floor(Math.random() * 90000)
+      const pid = `${valNum}`
+      metrics.forEach(m => {
+        mockData.push({
+          fileName: 'MOCK_DATA_V01.xlsx',
+          file_name: 'MOCK_DATA_V01.xlsx',
+          '文件名': 'MOCK_DATA_V01.xlsx',
+          metric: m,
+          '检测项': m,
+          value: (25.0 + Math.random() * 0.8).toFixed(1),
+          '实测值': (25.0 + Math.random() * 0.8).toFixed(1),
+          '正阀编号': pid,
+          '产品编号': pid,
+          sample: (25.0 + Math.random() * 0.8).toFixed(1)
+        })
       })
     }
 
@@ -607,9 +701,9 @@ const getMockHistory = () => {
       time: dates[i],
       target: targets[i],
       focusPoints: ['mean_diff', 'process_capability'],
-      records: dataCount,
+      records: mockData.length,
       data: mockData,
-      thoughts: ['历史数据加载中...', '检索AI诊断知识图谱...', '还原核心异常根因'],
+      thoughts: ['历史质检数据提取完毕...', '成功加载异常指标空间分布特征...', '匹配知识图谱历史耦合诊断方案...', '根因链路解析完成。'],
       diagnosis: {
         root_causes: [
           { rank: 1, cause: '环境温度波动干扰', influence: '导致电阻值产生系统性正向偏差', confidence: 0.92, category: '环境', evidence: ['环境湿度超标', '温度持续上涨'] },
@@ -626,6 +720,35 @@ const getMockHistory = () => {
 }
 
 const localHistory = JSON.parse(localStorage.getItem('quality_history') || '[]')
+// Repair any history records that might have empty or missing data arrays in user cache
+localHistory.forEach(row => {
+  if (!row.data || !Array.isArray(row.data) || row.data.length === 0) {
+    const dataCount = 20 + Math.floor(Math.random() * 20)
+    const mockData = []
+    const metrics = ['阻值-1和2', '阻值-3和4', '阻值-1和3', '阻值-1和4']
+    const fName = row.target ? `${row.target}_检测数据.xlsx` : 'MOCK_DATA_V01.xlsx'
+    for (let j = 0; j < dataCount; j++) {
+      const valNum = 10000 + Math.floor(Math.random() * 90000)
+      const pid = `${valNum}`
+      metrics.forEach(m => {
+        mockData.push({
+          fileName: fName,
+          file_name: fName,
+          '文件名': fName,
+          metric: m,
+          '检测项': m,
+          value: (25.0 + Math.random() * 0.8).toFixed(1),
+          '实测值': (25.0 + Math.random() * 0.8).toFixed(1),
+          '正阀编号': pid,
+          '产品编号': pid,
+          sample: (25.0 + Math.random() * 0.8).toFixed(1)
+        })
+      })
+    }
+    row.data = mockData
+    row.records = mockData.length
+  }
+})
 const historyRecords = ref(localHistory.length > 0 ? localHistory : getMockHistory())
 
 const openExpertCard = (row) => {
@@ -634,9 +757,40 @@ const openExpertCard = (row) => {
 }
 
 const isDiagnosisStreaming = ref(false)
+const isThinking = ref(false)
 const diagnosisThoughts = ref([])
 const currentThought = ref('')
 const streamingDiagnosisResult = ref([])
+const thoughtProcessContainer = ref(null)
+
+watch([diagnosisThoughts, currentThought], () => {
+  nextTick(() => {
+    if (thoughtProcessContainer.value) {
+      thoughtProcessContainer.value.scrollTop = thoughtProcessContainer.value.scrollHeight
+    }
+  })
+}, { deep: true })
+
+const isSolutionThinking = ref(false)
+const isPreThinking = ref(false)
+const isSolutionThoughtsBoxVisible = ref(false)
+const solutionThoughts = ref([])
+const currentSolutionThought = ref('')
+const streamingSolutions = ref([])
+const isRoiVisible = ref(false)
+const solutionThoughtContainer = ref(null)
+
+let solutionsThoughtTimer = null
+let solutionsStreamTimer = null
+let preThinkingTimeout = null
+
+watch([solutionThoughts, currentSolutionThought, isPreThinking], () => {
+  nextTick(() => {
+    if (solutionThoughtContainer.value) {
+      solutionThoughtContainer.value.scrollTop = solutionThoughtContainer.value.scrollHeight
+    }
+  })
+}, { deep: true })
 
 const feedbackVisible = ref(false)
 const feedbackForm = reactive({
@@ -652,6 +806,7 @@ const ttestDataUploaded = ref(false)
 const ttestData = ref([])
 const activeRole = ref('manager')
 const reportPreviewVisible = ref(false)
+const savedRunChartImg = ref('')
 
 const openReportPreview = () => {
   reportPreviewVisible.value = true
@@ -758,14 +913,14 @@ const fileStatsTable = computed(() => {
 
 const meanValue = computed(() => {
   if (uploadedData.value.length === 0) return 0
-  const values = uploadedData.value.map(r => parseFloat(r.实测值)).filter(v => !isNaN(v))
+  const values = uploadedData.value.map(r => parseFloat(r.实测值 || r['实测值'] || r.value || 0)).filter(v => !isNaN(v))
   if (values.length === 0) return 0
   return values.reduce((a, b) => a + b, 0) / values.length
 })
 
 const variance = computed(() => {
   if (uploadedData.value.length === 0) return 0
-  const values = uploadedData.value.map(r => parseFloat(r.实测值)).filter(v => !isNaN(v))
+  const values = uploadedData.value.map(r => parseFloat(r.实测值 || r['实测值'] || r.value || 0)).filter(v => !isNaN(v))
   if (values.length === 0) return 0
   const m = meanValue.value
   return values.reduce((a, b) => a + (b - m) ** 2, 0) / values.length
@@ -782,6 +937,8 @@ const initSamplingCharts = () => {
   })
   const mean = meanValue.value
   const sd = stdDev.value
+  const ucl_x = mean + 1.2 * sd
+  const lcl_x = mean - 1.2 * sd
 
   // Helper for horizontal line datasets (center, ucl, lcl)
   const getHorizontalLine = (val, color, dash = [], label = '') => ({
@@ -799,10 +956,6 @@ const initSamplingCharts = () => {
   if (runCtx) {
     if (chartInstances.run) chartInstances.run.destroy()
     
-    // For Xbar-S, we want limit lines in the plot
-    const ucl_x = mean + 1.2 * sd
-    const lcl_x = mean - 1.2 * sd
-
     chartInstances.run = new Chart(runCtx, {
       type: 'line',
       data: {
@@ -848,6 +1001,91 @@ const initSamplingCharts = () => {
         }
       }
     })
+  }
+
+  // Hidden Run Chart for PDF export (always rendered off-screen at correct resolution)
+  // Re-drawn based on the current table stats (itemStatsTable) representing envelope analysis
+  const hiddenCanvas = document.getElementById('hiddenRunChartCanvas')
+  if (hiddenCanvas) {
+    const hiddenCtx = hiddenCanvas.getContext('2d')
+    if (chartInstances.hiddenRun) chartInstances.hiddenRun.destroy()
+
+    const tableData = itemStatsTable.value.slice(0, 8)
+    const hiddenLabels = tableData.map(i => i.metric)
+    const hiddenMeans = tableData.map(i => parseFloat(i.mean || 0))
+    const hiddenMaxs = tableData.map(i => parseFloat(i.max || 0))
+    const hiddenMins = tableData.map(i => parseFloat(i.min || 0))
+
+    chartInstances.hiddenRun = new Chart(hiddenCtx, {
+      type: 'line',
+      data: {
+        labels: hiddenLabels,
+        datasets: [
+          {
+            label: '包络均值',
+            data: hiddenMeans,
+            borderColor: '#1e293b',
+            backgroundColor: '#1e293b',
+            borderWidth: 2,
+            tension: 0.1,
+            pointRadius: 4,
+            pointStyle: 'circle',
+            fill: false
+          },
+          {
+            label: '包络上限(最大)',
+            data: hiddenMaxs,
+            borderColor: '#ef4444',
+            backgroundColor: '#ef4444',
+            borderWidth: 1.5,
+            borderDash: [5, 5],
+            pointRadius: 3,
+            fill: false
+          },
+          {
+            label: '包络下限(最小)',
+            data: hiddenMins,
+            borderColor: '#ef4444',
+            backgroundColor: '#ef4444',
+            borderWidth: 1.5,
+            borderDash: [5, 5],
+            pointRadius: 3,
+            fill: false
+          }
+        ]
+      },
+      options: {
+        responsive: false,
+        maintainAspectRatio: false,
+        animation: false,
+        plugins: { 
+          legend: {
+            display: true,
+            position: 'top',
+            labels: { font: { size: 10 } }
+          }
+        },
+        scales: {
+          x: { 
+            title: { display: true, text: '检测指标', font: { size: 10 } },
+            grid: { display: true, color: '#f1f5f9' }, 
+            ticks: { font: { size: 9 }, autoSkip: false } 
+          },
+          y: { 
+            title: { display: true, text: '测量值', font: { size: 10 } },
+            grid: { display: true, color: '#f1f5f9' }, 
+            ticks: { font: { size: 10 } } 
+          }
+        }
+      }
+    })
+    
+    // Draw immediately and get static PNG data synchronously without waiting for animations!
+    try {
+      savedRunChartImg.value = hiddenCanvas.toDataURL('image/png')
+    } catch (e) {
+      console.warn('Failed to extract canvas image data synchronously:', e)
+    }
   }
 
   // Control Chart (SPC)
@@ -1244,6 +1482,7 @@ onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
   // Clean up chart instances
   if (chartInstances.run) chartInstances.run.destroy()
+  if (chartInstances.hiddenRun) chartInstances.hiddenRun.destroy()
   if (chartInstances.s) chartInstances.s.destroy()
   if (chartInstances.control) chartInstances.control.destroy()
   if (chartInstances.control2) chartInstances.control2.destroy()
@@ -1515,20 +1754,11 @@ watch(currentStep, (newStep) => {
       }, 800)
     }
   } else if (newStep === 3) {
-    // 如果方案还没生成（自动模式下可能提前跳转），补触发一次
-    if (solutions.value.length === 0) {
-      handleGenerateSolutions()
-    }
     nextTick(() => {
-      setTimeout(() => {
-        initPortraitCharts()
-        requestAnimationFrame(() => {
-          ecInstances.forEach(inst => {
-            if (typeof inst.resize === 'function') inst.resize()
-          })
-        })
-      }, 100)
+      startIntelligenceSolutionsFlow()
     })
+  } else {
+    cleanupSolutionsFlow()
   }
 })
 
@@ -1538,6 +1768,8 @@ const startAIScan = () => {
     return
   }
   isAutoMode.value = true
+  isHistoryMode.value = false
+  isSolutionsFlowCompleted.value = false
   currentStep.value = 99 // Show loading
   scanProgress.value = 0
   diagnosticLogs.value = []
@@ -1546,6 +1778,7 @@ const startAIScan = () => {
   diagnosisThoughts.value = []
   streamingDiagnosisResult.value = []
   isDiagnosisStreaming.value = false
+  isThinking.value = false
   
   if (scanInterval) clearInterval(scanInterval)
   
@@ -1584,14 +1817,7 @@ const startAIScan = () => {
 
 const fetchDiagnosisResultBackground = async () => {
   try {
-    const payload = filePath.value
-      ? { file_paths: [filePath.value] }
-      : {}
-    const res = await fetch('/api/diagnosis/analyze', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
+    const res = await fetch('/api/diagnosis/analyze', { method: 'POST' })
     if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`)
     const data = await res.json()
     if (data.code === 200) {
@@ -1610,36 +1836,50 @@ const startDiagnosticStreaming = () => {
   if (!diagnosisResult.value || isDiagnosisStreaming.value) return
   
   isDiagnosisStreaming.value = true
+  isThinking.value = true
   diagnosisThoughts.value = []
   streamingDiagnosisResult.value = []
   
   const thoughts = [
-    '正在计算多源质量因子的时空关联矩阵...',
-    '识别特征包络异常：发现 3 号磨损指标偏离控制线 15%',
-    '调取设备指纹库：匹配到主轴轴承维护预警模组...',
-    '执行反演推理：异常源指向阻值漂移与机械震动的强耦合项...',
-    '分析完成。准备生成根因诊断结果。'
+    '正在拉取实时多维质检张量数据进行高阶对齐...',
+    '对齐检测设备物理通道时序，计算多通道残差分布特征...',
+    '执行双向马尔可夫链异常演变推理，过滤探针传感器机械抖动噪声...',
+    '识别高阶局部异常子空间，正在提取密封性与电气绝缘的物理自相关因数...',
+    '调取航天质量机理数据库，计算关键特征包络边界置信度...',
+    '进行微观气源阀体振动形变在多频共振条件下的动力学重构...',
+    '交叉验证恒温恒湿循环延迟引起的热应力累积偏差...',
+    '正在检索 AI 核心诊断知识图谱：评估 3 号偏离控制线相关联成因...',
+    '匹配退化预测轨迹模式：偏载力偏移评分提升至 88%...',
+    '调用主轴轴承维护预警深度学习推理模组，锁定微米磨损周期关联性...',
+    '执行高维度多项式逻辑反演计算，定位加工工位力矩零点漂移参数...',
+    '协同交叉推演配气控制阀与系统流体流动时延的互补耦合作用...',
+    '根据遗传寻优方案，计算关键性能参数包之多目标多维优化解...',
+    '专家大脑全量数据链路重构完毕，正在生成根因链路判定结果...'
   ]
   
   let tIdx = 0
+  currentThought.value = thoughts[0]
   const tTimer = setInterval(() => {
     if (tIdx < thoughts.length) {
       diagnosisThoughts.value.push(thoughts[tIdx])
       tIdx++
+      if (tIdx < thoughts.length) {
+        currentThought.value = thoughts[tIdx]
+      } else {
+        currentThought.value = '即将输出深度确诊结果...'
+      }
     } else {
       clearInterval(tTimer)
+      currentThought.value = ''
+      isThinking.value = false
       // Start streaming causes
       streamCauses()
     }
-  }, 1000)
+  }, 250) // 加快4倍速度 (250ms interval)
 }
 
 const streamCauses = () => {
-  const causes = diagnosisResult.value?.root_causes || diagnosisResult.value?.diagnosis_result || []
-  if (causes.length === 0) {
-    isDiagnosisStreaming.value = false
-    return
-  }
+  const causes = diagnosisResult.value.root_causes
   let cIdx = 0
   const cTimer = setInterval(() => {
     if (cIdx < causes.length) {
@@ -1659,6 +1899,133 @@ const streamCauses = () => {
   }, 800)
 }
 
+const cleanupSolutionsFlow = () => {
+  if (preThinkingTimeout) {
+    clearTimeout(preThinkingTimeout)
+    preThinkingTimeout = null
+  }
+  if (solutionsThoughtTimer) {
+    clearInterval(solutionsThoughtTimer)
+    solutionsThoughtTimer = null
+  }
+  if (solutionsStreamTimer) {
+    clearInterval(solutionsStreamTimer)
+    solutionsStreamTimer = null
+  }
+  isPreThinking.value = false
+  isSolutionThoughtsBoxVisible.value = false
+  isSolutionThinking.value = false
+  solutionThoughts.value = []
+  currentSolutionThought.value = ''
+  streamingSolutions.value = []
+  isRoiVisible.value = false
+}
+
+const startIntelligenceSolutionsFlow = () => {
+  if (isSolutionsFlowCompleted.value || isHistoryMode.value) {
+    isPreThinking.value = false
+    isSolutionThoughtsBoxVisible.value = false
+    isSolutionThinking.value = false
+    const targetSolutions = solutions.value.length > 0 ? solutions.value : [
+      { priority: 'P0-紧急', action: '停机更换3号磨床主轴轴承', responsible: '设备运维部', expected_effect: '彻底解决轴向跳动，预计合格率回升至99%以上', implementation_time: '24小时内' },
+      { priority: 'P1-重要', action: '调整切削液配比并安装实时监控计', responsible: '生产技术部', expected_effect: '稳定加工温度，减少工件热变形风险', implementation_time: '3个工作日' },
+      { priority: 'P2-一般', action: '对夜班操作员加强过程检测培训', responsible: '质量管理部', expected_effect: '降低人为操作不规范导致的微小偏差', implementation_time: '一周内' }
+    ]
+    streamingSolutions.value = [...targetSolutions]
+    isRoiVisible.value = true
+    nextTick(() => {
+      initPortraitCharts()
+      requestAnimationFrame(() => {
+        ecInstances.forEach(inst => {
+          if (typeof inst.resize === 'function') inst.resize()
+        })
+      })
+    })
+    return
+  }
+
+  // Clear any existing timers or previous flows
+  cleanupSolutionsFlow()
+  
+  // Show pre-thinking state with the requested loading prompt for 2 seconds
+  isPreThinking.value = true
+  isSolutionThoughtsBoxVisible.value = true
+  
+  preThinkingTimeout = setTimeout(() => {
+    isPreThinking.value = false
+    isSolutionThinking.value = true
+    
+    const thoughts = [
+      '正在拉取专家系统诊断结果及根因耦合因子...',
+      '基于物理模型检索制造质量改进策略知识数据库...',
+      '分析当前偏差特征，自适应配对最优工艺控制参数...',
+      '评估工艺调整对系统的动态响应度，生成操作执行阈值...',
+      '核算各条改进策略对应的投资回报与质量回弹概率模型...',
+      '最优化质量体系迭代改进规划构建就绪，准备部署策略...'
+    ]
+    
+    let tIdx = 0
+    currentSolutionThought.value = thoughts[0]
+    solutionsThoughtTimer = setInterval(() => {
+      if (tIdx < thoughts.length) {
+        solutionThoughts.value.push(thoughts[tIdx])
+        tIdx++
+        if (tIdx < thoughts.length) {
+          currentSolutionThought.value = thoughts[tIdx]
+        } else {
+          currentSolutionThought.value = '即将部署改进方案计划...'
+        }
+      } else {
+        clearInterval(solutionsThoughtTimer)
+        solutionsThoughtTimer = null
+        currentSolutionThought.value = ''
+        isSolutionThinking.value = false
+        // Hide the thoughts box completely
+        isSolutionThoughtsBoxVisible.value = false
+        
+        // Start streaming table records/rows
+        streamIntelSolutions()
+      }
+    }, 250) // High speed (250ms interval)
+  }, 2000) // Stay 2 seconds as requested
+}
+
+const streamIntelSolutions = () => {
+  if (solutionsStreamTimer) clearInterval(solutionsStreamTimer)
+  
+  // Use either generated solutions or a fallback list to stream
+  const targetSolutions = solutions.value.length > 0 ? solutions.value : [
+    { priority: 'P0-紧急', action: '停机更换3号磨床主轴轴承', responsible: '设备运维部', expected_effect: '彻底解决轴向跳动，预计合格率回升至99%以上', implementation_time: '24小时内' },
+    { priority: 'P1-重要', action: '调整切削液配比并安装实时监控计', responsible: '生产技术部', expected_effect: '稳定加工温度，减少工件热变形风险', implementation_time: '3个工作日' },
+    { priority: 'P2-一般', action: '对夜班操作员加强过程检测培训', responsible: '质量管理部', expected_effect: '降低人为操作不规范导致的微小偏差', implementation_time: '一周内' }
+  ]
+  
+  let sIdx = 0
+  solutionsStreamTimer = setInterval(() => {
+    if (sIdx < targetSolutions.length) {
+      streamingSolutions.value.push(targetSolutions[sIdx])
+      sIdx++
+    } else {
+      clearInterval(solutionsStreamTimer)
+      solutionsStreamTimer = null
+      
+      isSolutionsFlowCompleted.value = true
+      
+      // Success, stream is complete!
+      // Reveal ROI Prediction Section with dynamic entering animation
+      isRoiVisible.value = true
+      nextTick(() => {
+        initPortraitCharts()
+        requestAnimationFrame(() => {
+          ecInstances.forEach(inst => {
+            if (typeof inst.resize === 'function') inst.resize()
+          })
+        })
+      })
+    }
+  }, 500) // Stream one row every 500ms
+}
+
 watch(currentStep, (newStep) => {
   if (newStep === 2) {
     if (diagnosisResult.value && streamingDiagnosisResult.value.length === 0) {
@@ -1670,56 +2037,68 @@ watch(currentStep, (newStep) => {
 // ecInstances is now in the outer script block
 
 const initPortraitCharts = () => {
-  // Predictor Chart
-  const predictorDom = document.getElementById('predictorChart')
-  if (predictorDom) {
-    // Dispose stale instance if it exists (from previous navigation)
-    const oldInstance = echarts.getInstanceByDom(predictorDom)
-    if (oldInstance) {
-      ecInstances.delete(oldInstance)
-      oldInstance.dispose()
-    }
-    const predictorChart = echarts.init(predictorDom)
-    ecInstances.add(predictorChart)
-    predictorChart.setOption({
-      tooltip: { trigger: 'axis' },
-      xAxis: { type: 'category', data: ['W1', 'W2', 'W3', 'W4'] },
-      yAxis: { type: 'value', name: '提升百分比' },
-      series: [
-        {
-          name: '预期良率提升',
-          data: [2, 5, 12, 18],
-          type: 'bar',
-          itemStyle: {
-            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              { offset: 0, color: '#409eff' },
-              { offset: 1, color: '#79bbff' }
-            ])
+  // Use setTimeout to guarantee that the DOM node has mounted and has dimensions
+  setTimeout(() => {
+    const predictorDom = document.getElementById('predictorChart')
+    if (predictorDom) {
+      if (predictorDom._ro) {
+        predictorDom._ro.disconnect()
+        delete predictorDom._ro
+      }
+
+      const existing = echarts.getInstanceByDom(predictorDom)
+      if (existing) {
+        existing.dispose()
+      }
+      const predictorChart = echarts.init(predictorDom)
+      ecInstances.add(predictorChart)
+      predictorChart.setOption({
+        tooltip: { trigger: 'axis' },
+        xAxis: { type: 'category', data: ['W1', 'W2', 'W3', 'W4'] },
+        yAxis: { type: 'value', name: '提升百分比' },
+        series: [
+          {
+            name: '预期良率提升',
+            data: [2, 5, 12, 18],
+            type: 'bar',
+            itemStyle: {
+              color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                { offset: 0, color: '#409eff' },
+                { offset: 1, color: '#79bbff' }
+              ])
+            },
+            barWidth: '30%'
           },
-          barWidth: '30%'
-        },
-        {
-          name: '成本回收曲线',
-          data: [1, 4, 9, 15],
-          type: 'line',
-          smooth: true,
-          itemStyle: { color: '#67c23a' }
-        }
-      ]
-    })
-    requestAnimationFrame(() => predictorChart.resize())
-  }
+          {
+            name: '成本回收曲线',
+            data: [1, 4, 9, 15],
+            type: 'line',
+            smooth: true,
+            itemStyle: { color: '#67c23a' }
+          }
+        ]
+      })
+      
+      // Use ResizeObserver to auto-resize when container dimensions update
+      if (window.ResizeObserver) {
+        const ro = new ResizeObserver(() => {
+          if (predictorDom.clientWidth > 0 && predictorDom.clientHeight > 0) {
+            predictorChart.resize()
+          }
+        })
+        ro.observe(predictorDom)
+        predictorDom._ro = ro
+      } else {
+        requestAnimationFrame(() => predictorChart.resize())
+      }
+    }
+  }, 100)
 }
 
 const handleGenerateSolutions = async () => {
   // No full-page mask, we show inline planning status in Step 2 instead
   try {
-    const rootCauses = diagnosisResult.value?.root_causes || diagnosisResult.value?.diagnosis_result || []
-    const res = await fetch('/api/solution/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ root_causes: rootCauses }),
-    })
+    const res = await fetch('/api/solution/generate', { method: 'POST' })
     if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`)
     const data = await res.json()
     if (data.code === 200) {
@@ -1736,12 +2115,6 @@ const getTagType = (cat) => {
   return 'info'
 }
 
-const getEvidenceArray = (ev) => {
-  if (Array.isArray(ev)) return ev
-  if (typeof ev === 'string' && ev.trim()) return [ev]
-  return []
-}
-
 const createWorkOrder = (sol) => ElMessage.success(`工单已派发至：${sol.responsible}`)
 const exportReport = async () => {
   const loading = ElLoading.service({
@@ -1756,6 +2129,35 @@ const exportReport = async () => {
       throw new Error('找不到报告模版元素')
     }
 
+    // Force sampling chart rendering to populate off-screen canvas image data synchronously
+    initSamplingCharts()
+
+    // Capture the off-screen high-fidelity canvas directly to avoid any state synchronization delay
+    const hiddenCanvas = document.getElementById('hiddenRunChartCanvas')
+    if (hiddenCanvas) {
+      try {
+        const directDataUrl = hiddenCanvas.toDataURL('image/png')
+        if (directDataUrl && directDataUrl !== 'data:,') {
+          savedRunChartImg.value = directDataUrl
+        }
+      } catch (err) {
+        console.warn('Direct hidden canvas data extraction failed:', err)
+      }
+    }
+
+    // Use the off-screen rendered high-fidelity static image of runChartCanvas
+    const chartImgEl = document.getElementById('pdf-chart-image')
+    if (chartImgEl) {
+      if (savedRunChartImg.value) {
+        chartImgEl.src = savedRunChartImg.value
+      } else {
+        const canvasEl = document.getElementById('runChartCanvas')
+        if (canvasEl) {
+          chartImgEl.src = canvasEl.toDataURL('image/png')
+        }
+      }
+    }
+
     // Set visibility for capture
     const originalStyle = reportElement.style.cssText
     reportElement.style.position = 'absolute'
@@ -1764,39 +2166,45 @@ const exportReport = async () => {
     reportElement.style.zIndex = '-1000'
     reportElement.style.display = 'block'
 
-    const canvas = await html2canvas(reportElement, {
-      scale: 2,
-      useCORS: true,
-      logging: false,
-      backgroundColor: '#ffffff'
+    // Let the image render completely in the DOM before capturing
+    await new Promise((resolve) => {
+      const img = document.getElementById('pdf-chart-image')
+      if (img && img.src) {
+        if (img.complete) {
+          resolve()
+        } else {
+          img.onload = () => resolve()
+          img.onerror = () => resolve()
+        }
+      } else {
+        resolve()
+      }
     })
 
-    // Restore original style
-    reportElement.style.cssText = originalStyle
-
-    const imgData = canvas.toDataURL('image/png')
     const pdf = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
       format: 'a4'
     })
 
-    const imgWidth = 210
-    const imgHeight = (canvas.height * imgWidth) / canvas.width
-    
-    // Add image to PDF - handle multi-page if necessary
-    let heightLeft = imgHeight
-    let position = 0
-    
-    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
-    heightLeft -= 297
-
-    while (heightLeft >= 0) {
-      position = heightLeft - imgHeight
-      pdf.addPage()
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
-      heightLeft -= 297
+    const pages = reportElement.querySelectorAll('.pdf-page')
+    for (let i = 0; i < pages.length; i++) {
+       const page = pages[i]
+       const canvas = await html2canvas(page, {
+         scale: 2,
+         useCORS: true,
+         logging: false,
+         backgroundColor: '#ffffff'
+       })
+       const imgData = canvas.toDataURL('image/png')
+       if (i > 0) {
+         pdf.addPage()
+       }
+       pdf.addImage(imgData, 'PNG', 0, 0, 210, 297)
     }
+
+    // Restore original style
+    reportElement.style.cssText = originalStyle
 
     const filename = `质量诊断报告_${filter.value.improvementTarget?.substring(0, 8) || '分析报告'}_${new Date().getTime()}.pdf`
     pdf.save(filename)
@@ -1822,31 +2230,81 @@ const archiveHistory = () => {
   })
 }
 
+const ensureHistoryRecordData = (row) => {
+  if (!row) return
+  if (!row.data || !Array.isArray(row.data) || row.data.length === 0) {
+    const dataCount = 20 + Math.floor(Math.random() * 20)
+    const mockData = []
+    const metrics = ['阻值-1和2', '阻值-3和4', '阻值-1和3', '阻值-1和4']
+    const fName = row.target ? `${row.target}_检测数据.xlsx` : 'MOCK_DATA_V01.xlsx'
+    for (let j = 0; j < dataCount; j++) {
+      const valNum = 10000 + Math.floor(Math.random() * 90000)
+      const pid = `${valNum}`
+      metrics.forEach(m => {
+        mockData.push({
+          fileName: fName,
+          file_name: fName,
+          '文件名': fName,
+          metric: m,
+          '检测项': m,
+          value: (25.0 + Math.random() * 0.8).toFixed(1),
+          '实测值': (25.0 + Math.random() * 0.8).toFixed(1),
+          '正阀编号': pid,
+          '产品编号': pid,
+          sample: (25.0 + Math.random() * 0.8).toFixed(1)
+        })
+      })
+    }
+    row.data = mockData
+    row.records = mockData.length
+  }
+}
+
 const loadHistory = (row) => {
+  ensureHistoryRecordData(row)
   uploadedData.value = JSON.parse(JSON.stringify(row.data || []))
   diagnosisResult.value = JSON.parse(JSON.stringify(row.diagnosis || null))
   solutions.value = JSON.parse(JSON.stringify(row.solutions_data || []))
+  isHistoryMode.value = true
   streamingDiagnosisResult.value = diagnosisResult.value ? diagnosisResult.value.root_causes : []
+  streamingSolutions.value = JSON.parse(JSON.stringify(row.solutions_data || []))
   diagnosisThoughts.value = row.thoughts || ['数据加载完成', '正在解析历史诊断路径', '深度同步核心根因']
   filter.value.improvementTarget = row.target
   filter.value.focusPoints = row.focusPoints || ['mean_diff', 'process_capability']
+  
+  isThinking.value = false
+  isDiagnosisStreaming.value = false
+  isSolutionThoughtsBoxVisible.value = false
+  isSolutionThinking.value = false
+  
   currentStep.value = 1
   nextTick(() => {
-    initSamplingCharts()
-    initPortraitCharts()
+    setTimeout(() => {
+      initSamplingCharts()
+      initPortraitCharts()
+    }, 150)
   })
   showHistory.value = false
-  ElMessage.success('已加载历史纪录')
+  ElMessage.success('已加载历史改善诊断详情')
 }
 
 const viewFullDiagnosis = (row) => {
+  ensureHistoryRecordData(row)
   uploadedData.value = JSON.parse(JSON.stringify(row.data || []))
   diagnosisResult.value = JSON.parse(JSON.stringify(row.diagnosis || null))
   solutions.value = JSON.parse(JSON.stringify(row.solutions_data || []))
+  isHistoryMode.value = true
   streamingDiagnosisResult.value = diagnosisResult.value ? diagnosisResult.value.root_causes : []
+  streamingSolutions.value = JSON.parse(JSON.stringify(row.solutions_data || []))
   diagnosisThoughts.value = row.thoughts || ['数据加载完成', '正在解析历史诊断路径', '深度同步核心根因']
   filter.value.improvementTarget = row.target
   filter.value.focusPoints = row.focusPoints || ['mean_diff', 'process_capability']
+  
+  isThinking.value = false
+  isDiagnosisStreaming.value = false
+  isSolutionThoughtsBoxVisible.value = false
+  isSolutionThinking.value = false
+  
   currentStep.value = 2
   nextTick(() => {
     initSamplingCharts()
@@ -1863,6 +2321,9 @@ const reset = () => {
   uploadedData.value = [] 
   diagnosisResult.value = null
   solutions.value = []
+  savedRunChartImg.value = ''
+  isHistoryMode.value = false
+  isSolutionsFlowCompleted.value = false
   router.push('/')
 }
 </script>
@@ -1874,14 +2335,33 @@ const reset = () => {
   left: -9999px;
   top: 0;
   width: 794px; /* A4 width in pixels at 96 DPI */
-  background-color: white;
   color: #333;
   font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
   z-index: -1000;
+  background-color: #f1f5f9;
 }
 
-.pdf-container {
+.pdf-page {
+  width: 794px;
+  height: 1122px;
   padding: 40px;
+  box-sizing: border-box;
+  background-color: white;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+
+.pdf-header-compact {
+  border-bottom: 2px solid #0052d9;
+  padding-bottom: 10px;
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .pdf-header {
@@ -1897,6 +2377,14 @@ const reset = () => {
   display: flex;
   align-items: center;
   gap: 15px;
+}
+
+.pdf-logo-text {
+  font-size: 24px;
+  font-weight: 850;
+  color: #0052d9;
+  letter-spacing: -0.5px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 .pdf-logo {
@@ -2056,7 +2544,10 @@ const reset = () => {
 }
 
 .pdf-footer {
-  margin-top: 50px;
+  position: absolute;
+  bottom: 40px;
+  left: 40px;
+  right: 40px;
   text-align: center;
 }
 
@@ -2697,23 +3188,69 @@ const reset = () => {
   z-index: 10;
 }
 
-/* Expert Card Styles */
+/* Expert Card Premium Styles */
+.expert-card-dialog {
+  background: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+.expert-card-dialog :deep(.el-dialog__header) {
+  display: none !important;
+}
+
+.expert-card-dialog :deep(.el-dialog__body) {
+  padding: 0 !important;
+  background: transparent !important;
+}
+
 .expert-card-container {
-  padding: 10px;
+  padding: 0;
 }
 
 .card-main {
   position: relative;
-  border-radius: 16px;
+  border-radius: 20px;
   overflow: hidden;
-  background: #fff;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
-  border: 1px solid #f0f0f0;
+  background: #ffffff;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.82);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* Close button on card top-right */
+.expert-card-close {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.2);
+  color: rgba(255, 255, 255, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.expert-card-close:hover {
+  background: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+  transform: scale(1.08) rotate(90deg);
+}
+
+/* Header Background containing premium mesh & grid */
 .card-top-bg {
-  height: 120px;
-  background: linear-gradient(135deg, #0052d9 0%, #002266 100%);
+  height: 140px;
+  background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
+  background-image: 
+    radial-gradient(rgba(255, 255, 255, 0.12) 1px, transparent 1px),
+    linear-gradient(135deg, #020617 0%, #1e3a8a 100%);
+  background-size: 12px 12px, 100% 100%;
   position: absolute;
   top: 0;
   left: 0;
@@ -2721,11 +3258,12 @@ const reset = () => {
   z-index: 0;
 }
 
+/* Card Content Area */
 .card-content {
   position: relative;
   z-index: 1;
   padding: 24px;
-  padding-top: 32px;
+  padding-top: 28px;
 }
 
 .card-header-expert {
@@ -2738,156 +3276,335 @@ const reset = () => {
 .expert-identity {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
 }
 
+/* Animated Neon Expert Badge */
 .expert-avatar-box {
-  width: 56px;
-  height: 56px;
-  background: #2b65d9;
-  border-radius: 12px;
+  width: 54px;
+  height: 54px;
+  background: rgba(15, 23, 42, 0.85);
+  border-radius: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  border: 2px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 0 15px rgba(49, 232, 255, 0.35);
+  border: 2px solid rgba(49, 232, 255, 0.6);
+  position: relative;
+}
+
+.avatar-glow {
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  border-radius: 14px;
+  border: 2px solid #31e8ff;
+  opacity: 0;
+  animation: borderGlow 2.5s infinite alternate;
+  pointer-events: none;
+}
+
+@keyframes borderGlow {
+  0% { opacity: 0.1; box-shadow: 0 0 4px rgba(49, 232, 255, 0.2); }
+  100% { opacity: 0.7; box-shadow: 0 0 14px rgba(49, 232, 255, 0.6); }
 }
 
 .expert-name-box {
-  color: #fff;
+  color: #ffffff;
 }
 
 .expert-label {
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-  line-height: 1.4;
+  letter-spacing: 0.5px;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  line-height: 1.25;
 }
 
+.expert-sub-label {
+  font-size: 9px;
+  font-family: 'JetBrains Mono', monospace;
+  opacity: 0.65;
+  letter-spacing: 0.8px;
+  margin-top: 1px;
+}
+
+/* Infinite Breath Green online dot */
 .expert-status {
-  font-size: 12px;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
-  opacity: 0.9;
-  margin-top: 4px;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  padding: 2px 8px;
+  border-radius: 12px;
+  margin-top: 6px;
 }
 
-.dot-online {
+.status-text {
+  font-size: 10px;
+  color: #34d399;
+  font-weight: 600;
+}
+
+.dot-online-pulse {
   width: 6px;
   height: 6px;
-  background: #52c41a;
+  background: #10b981;
   border-radius: 50%;
   display: inline-block;
+  box-shadow: 0 0 8px #10b981;
+  animation: statusPulse 1.8s infinite ease-in-out;
+}
+
+@keyframes statusPulse {
+  0% { transform: scale(0.9); opacity: 0.6; box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+  70% { transform: scale(1.1); opacity: 1; box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+  100% { transform: scale(0.9); opacity: 0.6; box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
 }
 
 .card-id {
-  background: rgba(255, 255, 255, 0.2);
-  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
   padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-family: monospace;
+  border-radius: 6px;
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.5px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  text-shadow: 0 1px 2px rgba(0,0,0,0.2);
 }
 
 .card-body-expert {
-  margin-top: 28px;
+  margin-top: 24px;
 }
 
-.card-field {
+/* Bento grid container */
+.meta-bento-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
   margin-bottom: 16px;
 }
 
-.field-label {
-  font-size: 12px;
-  color: #909399;
+.bento-meta-item {
+  background: #f8fafc;
+  border: 1px solid #f1f5f9;
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+
+.meta-label {
+  font-size: 10px;
+  color: #64748b;
+  font-weight: 700;
+  letter-spacing: 0.5px;
   margin-bottom: 4px;
 }
 
-.field-value {
-  font-size: 15px;
-  color: #303133;
-  font-weight: 500;
-  line-height: 1.5;
-}
-
-.field-value.highlight {
-  color: #0052d9;
+.meta-value-goal {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: #1e293b;
   font-weight: 700;
-  font-size: 18px;
 }
 
+.meta-value-goal .icon-target {
+  color: #0052d9;
+}
+
+.meta-value-time {
+  font-size: 13px;
+  color: #475569;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 500;
+}
+
+/* Telemetry Dashboard Stats */
 .card-stats-expert {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin: 24px 0;
-  background: #f8faff;
-  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 16px 0;
+  background: linear-gradient(135deg, #f0f4ff 0%, #f5f8ff 100%);
+  padding: 14px 18px;
   border-radius: 12px;
-  border: 1px solid #eef2ff;
+  border: 1px solid #e0ebff;
 }
 
-.stat-box {
+.card-stats-expert .stat-box {
+  flex: 1;
   text-align: center;
 }
 
+.stat-divider-vertical {
+  width: 1px;
+  height: 38px;
+  background: #dbeafe;
+}
+
+.stat-num-container {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 2px;
+}
+
 .stat-num {
-  font-size: 24px;
+  font-size: 26px;
   font-weight: 800;
-  color: #1e293b;
+  color: #1e3a8a;
+  letter-spacing: -0.5px;
+  font-family: 'JetBrains Mono', monospace;
 }
 
 .stat-num.danger-num {
-  color: #ef4444;
+  color: #dc2626;
+}
+
+.stat-unit {
+  font-size: 11px;
+  color: #475569;
+  font-weight: 600;
+}
+
+.stat-unit.danger-unit {
+  color: #dc2626;
 }
 
 .stat-label {
-  font-size: 12px;
+  font-size: 11px;
   color: #64748b;
+  font-weight: 600;
   margin-top: 2px;
 }
 
+/* Diagnostic conclusion bento list */
 .card-diagnosis-preview {
-  background: #fff;
-  border: 1px solid #f1f5f9;
-  padding: 12px;
-  border-radius: 8px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  padding: 14px;
+  border-radius: 12px;
+  margin-top: 14px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.02);
 }
 
 .preview-label {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 700;
   color: #475569;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.label-indicator {
+  width: 4px;
+  height: 12px;
+  background: #0052d9;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+.preview-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .preview-item {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  font-size: 13px;
-  color: #334155;
-  margin-bottom: 8px;
-  line-height: 1.5;
+  gap: 10px;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #f1f5f9;
 }
 
+.item-index {
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  color: #3b82f6;
+  background: #eff6ff;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.item-text-content {
+  flex: 1;
+}
+
+.item-cause-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #1e293b;
+  line-height: 1.4;
+}
+
+.item-cause-desc {
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
+/* Footer Drawer and Actions */
 .card-footer-expert {
-  margin-top: 32px;
+  margin-top: 24px;
 }
 
 .btn-expert {
   height: 48px;
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 15px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.5px;
+  background: #0052d9;
+  border-color: #0052d9;
+  box-shadow: 0 4px 12px rgba(0, 82, 217, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-expert:hover {
+  background: #2463eb;
+  border-color: #2463eb;
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35);
+  transform: translateY(-1px);
+}
+
+.btn-expert .icon-arrow {
+  margin-left: 2px;
+  transition: transform 0.2s;
+}
+
+.btn-expert:hover .icon-arrow {
+  transform: translateX(3px);
 }
 
 .footer-hint {
   text-align: center;
-  margin-top: 12px;
-  font-size: 11px;
-  color: #cbd5e1;
+  margin-top: 14px;
+  font-size: 10px;
+  color: #94a3b8;
+  font-weight: 600;
+  letter-spacing: 0.5px;
 }
 
 .report-preview-grid {
@@ -3002,22 +3719,50 @@ const reset = () => {
   }
 }
 /* AI Thought Process Streaming */
-.thought-process-wrapper {
+.thought-process-wrapper,
+.solution-thought-wrapper {
   background: #f8fafc;
   padding: 16px;
   border-radius: 8px;
   border-left: 4px solid #3b82f6;
+  height: 192px;
+  box-sizing: border-box;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+}
+
+.thought-process-wrapper::-webkit-scrollbar,
+.solution-thought-wrapper::-webkit-scrollbar {
+  width: 6px;
+}
+.thought-process-wrapper::-webkit-scrollbar-track,
+.solution-thought-wrapper::-webkit-scrollbar-track {
+  background: transparent;
+}
+.thought-process-wrapper::-webkit-scrollbar-thumb,
+.solution-thought-wrapper::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border-radius: 3px;
+}
+.thought-process-wrapper::-webkit-scrollbar-thumb:hover,
+.solution-thought-wrapper::-webkit-scrollbar-thumb:hover {
+  background-color: #94a3b8;
 }
 
 .thought-item {
   display: flex;
   align-items: center;
   gap: 10px;
+  height: 20px;
   margin-bottom: 8px;
   color: #64748b;
   font-size: 13px;
+  line-height: 20px;
   opacity: 0;
   animation: fadeIn 0.3s forwards;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .thought-item:last-child {
