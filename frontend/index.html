@@ -5,6 +5,19 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>frontend</title>
+    <script>
+      // Global ResizeObserver error suppressor
+      window.addEventListener('error', function (e) {
+        if (e.message && (
+          e.message.indexOf('ResizeObserver') >= 0 ||
+          e.message.indexOf('loop completed') >= 0 ||
+          e.message.indexOf('loop limit exceeded') >= 0
+        )) {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+        }
+      }, true);
+    </script>
   </head>
   <body>
     <div id="app"></div>
