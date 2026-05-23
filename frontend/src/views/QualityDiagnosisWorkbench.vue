@@ -643,7 +643,7 @@ const ecInstances = new Set()
 <script setup>
 import { ref, reactive, nextTick, markRaw, watch, computed, onMounted, onUnmounted, shallowRef } from 'vue'
 import { useRouter } from 'vue-router'
-import ReportPreviewModal from './ components/ReportPreviewModal.vue'
+import ReportPreviewModal from './components/ReportPreviewModal.vue'
 import { 
   Upload, Cpu, PieChart, CircleCheck, ArrowLeft, ArrowRight, Document,
   UploadFilled, Check, Download, Loading, View, Odometer, Connection, Management, Postcard, Close
