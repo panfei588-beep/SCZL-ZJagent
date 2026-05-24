@@ -4,7 +4,7 @@ from typing import List, Optional
 import json
 import logging
 
-from langchain_community.chat_models import ChatTongyi
+from langchain_openai import ChatOpenAI
 from langchain.schema import HumanMessage, SystemMessage
 from core.config import get_settings
 from knowledge_base.milvus_client import search_improvement_cases
@@ -13,9 +13,10 @@ router = APIRouter()
 settings = get_settings()
 
 # 直接调用 LLM 生成方案，不通过完整工作流
-llm = ChatTongyi(
-    model="qwen-max",
-    dashscope_api_key=settings.dashscope_api_key,
+llm = ChatOpenAI(
+    model="claude-sonnet-4-6",
+    api_key=settings.openai_api_key,
+    base_url=settings.openai_base_url,
     temperature=0.3,
     max_tokens=4096,
 )
