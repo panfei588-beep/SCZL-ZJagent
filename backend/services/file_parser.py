@@ -233,7 +233,15 @@ async def _parse_with_mineru_cli(file_path: str) -> dict[str, Any]:
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
-    stdout, stderr = await proc.communicate()
+    try:
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=120)
+    except asyncio.TimeoutError:
+        try:
+            proc.kill()
+        except ProcessLookupError:
+            pass
+        logging.warning("MinerU CLI 超时（120s），回退到基础文本提取")
+        return await _fallback_text_extraction(file_path)
 
     if proc.returncode != 0:
         # CLI 执行失败 → 回退到基础文本提取
