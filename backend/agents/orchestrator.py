@@ -14,7 +14,7 @@ from typing import Optional, TypedDict
 
 import numpy as np
 import pandas as pd
-from langchain_community.chat_models import ChatTongyi
+from langchain_openai import ChatOpenAI
 from langchain.schema import HumanMessage, SystemMessage
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
@@ -52,9 +52,10 @@ class QualityAgentState(TypedDict):
 
 # ======================== LLM 初始化 ========================
 
-llm = ChatTongyi(
-    model="qwen-max",
-    dashscope_api_key=settings.dashscope_api_key,
+llm = ChatOpenAI(
+    model="claude-sonnet-4-6",
+    api_key=settings.openai_api_key,
+    base_url=settings.openai_base_url,
     temperature=0.1,
     max_tokens=4096,
 )

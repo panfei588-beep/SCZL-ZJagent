@@ -3,6 +3,11 @@ from functools import lru_cache
 
 
 class Settings(BaseSettings):
+    # LLM (OpenAI compatible - Claude via proxy)
+    openai_api_key: str = ""
+    openai_base_url: str = ""
+
+    # DashScope (Milvus embedding only)
     dashscope_api_key: str = ""
 
     milvus_host: str = "localhost"

@@ -8,7 +8,10 @@ langchain==0.3.14
 langchain-community==0.3.14
 langchain-core==0.3.29
 
-# Qwen / DashScope
+# LLM (OpenAI compatible - Claude via proxy)
+langchain-openai>=0.3.0
+
+# DashScope (Milvus embedding only)
 dashscope==1.22.1
 
 # Vector Database
