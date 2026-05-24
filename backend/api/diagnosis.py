@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from typing import Optional, Any
 from agents.orchestrator import run_analysis
@@ -22,10 +22,17 @@ class QualityAnalyzeRequest(BaseModel):
 
 
 @router.post("/analyze")
-async def analyze(request: QualityAnalyzeRequest):
+async def analyze(request: Request):
     """执行完整质量分析工作流（数据统计 → 诊断 → 方案）"""
     try:
-        paths = request.file_paths or ([request.file_path] if request.file_path else [])
+        # 兼容无 body 的请求（前端 fetch 空 POST）
+        body = await request.body()
+        if body:
+            payload = await request.json()
+            req = QualityAnalyzeRequest(**payload)
+        else:
+            req = QualityAnalyzeRequest()
+        paths = req.file_paths or ([req.file_path] if req.file_path else [])
         if not paths:
             return {"code": 200, "message": "无文件路径，返回空结果", "data": {
                 "statistics": {},
@@ -38,15 +45,15 @@ async def analyze(request: QualityAnalyzeRequest):
             }}
 
         user_params = {
-            "equipment": request.equipment,
-            "days": request.days,
-            "operator": request.operator,
-            "material": request.material,
-            "environment": request.environment,
-            "focus_metrics": request.focus_metrics,
-            "analysis_goal": request.analysis_goal,
-            "depth": str(request.depth) if request.depth is not None else None,
-            "time_range": request.time_range,
+            "equipment": req.equipment,
+            "days": req.days,
+            "operator": req.operator,
+            "material": req.material,
+            "environment": req.environment,
+            "focus_metrics": req.focus_metrics,
+            "analysis_goal": req.analysis_goal,
+            "depth": str(req.depth) if req.depth is not None else None,
+            "time_range": req.time_range,
         }
 
         # 对每个文件执行分析，合并结果
