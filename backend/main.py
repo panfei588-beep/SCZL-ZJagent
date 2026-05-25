@@ -12,14 +12,26 @@ from core.config import get_settings
 
 # 配置日志：同时输出到 stderr 和文件
 LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+LOG_FILE = os.path.join(LOG_DIR, "app.log")
 os.makedirs(LOG_DIR, exist_ok=True)
+
+# 验证日志文件可写（容器 volume 挂载后可能被覆盖）
+try:
+    with open(LOG_FILE, "a") as f:
+        f.write("")  # 测试写入
+except Exception as e:
+    print(f"WARNING: Cannot write to log file {LOG_FILE}: {e}")
+    LOG_FILE = None
+
+handlers = [logging.StreamHandler()]
+if LOG_FILE:
+    handlers.append(logging.FileHandler(LOG_FILE, encoding="utf-8"))
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler(os.path.join(LOG_DIR, "app.log"), encoding="utf-8"),
-    ],
+    handlers=handlers,
+    force=True,  # 覆盖已有的 handlers（uvicorn 可能提前配置了）
 )
 
 settings = get_settings()
