@@ -193,24 +193,17 @@ async def _fallback_text_extraction(file_path: str) -> dict[str, Any]:
         except (ImportError, Exception) as e:
             logging.debug(f"python-docx 提取失败: {e}")
 
-    # 图片: 用 PaddleOCR（中文识别精度远优于 pytesseract）
+    # 图片: 尝试 pytesseract OCR（需系统安装 tesseract + 中文语言包）
     if ext in (".jpg", ".jpeg", ".png"):
         try:
-            from paddleocr import PaddleOCR
-            ocr = PaddleOCR(use_angle_cls=True, lang='ch', show_log=False)
-            result = ocr.ocr(file_path, cls=True)
-            lines = []
-            if result and result[0]:
-                for line in result[0]:
-                    if line and len(line) >= 2:
-                        text_info = line[1]
-                        if text_info and text_info[0]:
-                            lines.append(text_info[0])
-            text = "\n".join(lines)
+            import pytesseract
+            from PIL import Image
+            img = Image.open(file_path)
+            text = pytesseract.image_to_string(img, lang='chi_sim+eng')
             if text.strip():
                 return {"total_records": 1, "records": [{"raw_text": text.strip()[:2000]}]}
         except (ImportError, Exception) as e:
-            logging.debug(f"PaddleOCR 失败: {e}")
+            logging.debug(f"图片 OCR 失败: {e}")
 
     # 最后兜底: 返回文件基本信息
     file_size = os.path.getsize(file_path)

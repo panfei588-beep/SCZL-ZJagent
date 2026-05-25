@@ -25,9 +25,10 @@ mineru>=3.1.0
 PyPDF2>=3.0.0
 python-docx>=1.1.0
 PyMuPDF>=1.24.0
-paddleocr>=2.8.0
-paddlepaddle>=2.6.0
 Pillow>=10.0.0
+# PaddleOCR 体积太大暂时移除，图片 OCR 使用 pytesseract 代替（需系统安装 tesseract）
+# paddleocr>=2.8.0
+# paddlepaddle>=2.6.0
 
 # Data Processing
 pandas>=2.3.3
