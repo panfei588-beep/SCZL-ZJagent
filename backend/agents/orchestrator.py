@@ -53,7 +53,7 @@ class QualityAgentState(TypedDict):
 # ======================== LLM 初始化 ========================
 
 llm = ChatOpenAI(
-    model="claude-sonnet-4-6",
+    model=settings.openai_model,
     api_key=settings.openai_api_key,
     base_url=settings.openai_base_url,
     temperature=0.1,
