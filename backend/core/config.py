@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     # LLM (OpenAI compatible - Claude via proxy)
     openai_api_key: str = ""
     openai_base_url: str = ""
+    openai_model: str = "claude-sonnet-4-6"
 
     # DashScope (Milvus embedding only)
     dashscope_api_key: str = ""

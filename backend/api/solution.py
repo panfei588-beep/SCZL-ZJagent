@@ -14,7 +14,7 @@ settings = get_settings()
 
 # 直接调用 LLM 生成方案，不通过完整工作流
 llm = ChatOpenAI(
-    model="claude-sonnet-4-6",
+    model=settings.openai_model,
     api_key=settings.openai_api_key,
     base_url=settings.openai_base_url,
     temperature=0.3,
