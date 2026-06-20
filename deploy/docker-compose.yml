@@ -128,7 +128,7 @@ services:
       context: ../frontend
       dockerfile: Dockerfile
     ports:
-      - "8088:80"
+      - "8089:80"
     depends_on:
       - backend
     networks:
