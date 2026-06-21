@@ -91,6 +91,7 @@ services:
   # 后端 FastAPI 服务
   backend:
     container_name: quality-backend
+    image: quality-backend:latest
     build:
       context: ../backend
       dockerfile: Dockerfile
@@ -124,6 +125,7 @@ services:
   # 前端 Nginx 服务
   frontend:
     container_name: quality-frontend
+    image: quality-frontend:latest
     build:
       context: ../frontend
       dockerfile: Dockerfile
