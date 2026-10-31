@@ -3,7 +3,7 @@
     <!-- Sidebar -->
     <aside class="sidebar">
       <div class="logo-container">
-        <h1 class="logo-title">航天爱锐</h1>
+        <h1 class="logo-title">CorpCLaw</h1>
         <p class="logo-subtitle">企业数字员工</p>
       </div>
       

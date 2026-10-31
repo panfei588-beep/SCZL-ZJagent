@@ -628,7 +628,7 @@ border-top:none;mso-border-top-alt:none;border-bottom:4.5000pt solid rgb(255,0,0
 mso-border-bottom-alt:4.5000pt solid rgb(255,0,0);" ><p class=MsoNormal  align=center  style="margin-top:101.4000pt;margin-left:0.7500pt;mso-para-margin-top:6.5000gd;
 text-indent:-0.7500pt;text-align:center;line-height:23.0000pt;
 mso-line-height-rule:exactly;" ><b style="mso-bidi-font-weight:normal" ><span style="font-family:'Times New Roman';mso-ansi-font-weight:bold;font-size:12.0000pt;
-mso-font-kerning:7.5000pt;" ><font face="SimSun" >科技集团公司一院航天爱锐公司</font></span></b><b style="mso-bidi-font-weight:normal" ><span style="font-family:'Times New Roman';mso-ansi-font-weight:bold;font-size:12.0000pt;
+mso-font-kerning:7.5000pt;" ><font face="SimSun" >科技集团公司一院靠谱ai公司</font></span></b><b style="mso-bidi-font-weight:normal" ><span style="font-family:'Times New Roman';mso-ansi-font-weight:bold;font-size:12.0000pt;
 mso-font-kerning:1.0000pt;" ><o:p></o:p></span></b></p></td></tr></table></div>
 <span style="mso-spacerun:'yes';font-family:'Times New Roman';font-size:14.0000pt;
 mso-font-kerning:1.0000pt;" ><br clear=all style='page-break-before:always;mso-break-type:section-break'></span>

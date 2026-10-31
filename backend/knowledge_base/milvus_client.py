@@ -5,8 +5,23 @@ Milvus 向量数据库客户端（双库版 + 待验证暂存区）
 待验证暂存区 (pending_diagnosis_cases) — 低置信度知识暂存
 """
 
+from langchain.embeddings.base import Embeddings
+from sentence_transformers import SentenceTransformer
+
+class LocalEmbeddings(Embeddings):
+    def __init__(self):
+        # 使用轻量级模型（200MB内存，50ms/条）
+        self.model = SentenceTransformer('/home/ubuntu/models/sentence-transformers/all-MiniLM-L6-v2')  # 📌 可替换为本地模型路径
+
+    def embed_documents(self, texts):
+        # 必须实现的方法：批量向量化
+        return [self.model.encode(text).tolist() for text in texts]
+
+    def embed_query(self, text):
+        # 必须实现的方法：单条查询向量化
+        return self.model.encode(text).tolist()
+from sentence_transformers import SentenceTransformer
 from langchain_community.vectorstores import Milvus
-from langchain_community.embeddings import DashScopeEmbeddings
 from langchain.docstore.document import Document
 from core.config import get_settings
 
@@ -17,11 +32,8 @@ _improvement_vectorstore = None
 _pending_diagnosis_vectorstore = None
 
 
-def _get_embeddings() -> DashScopeEmbeddings:
-    return DashScopeEmbeddings(
-        model="text-embedding-v2",
-        dashscope_api_key=settings.dashscope_api_key,
-    )
+def _get_embeddings() -> LocalEmbeddings:
+    return LocalEmbeddings()# ✅ 无参数直接调用
 
 
 def _connection_args() -> dict:

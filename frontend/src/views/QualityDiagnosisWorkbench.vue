@@ -476,7 +476,7 @@
                 <span>查看完整诊断画布</span>
                 <el-icon class="icon-arrow"><ArrowRight /></el-icon>
               </el-button>
-              <div class="footer-hint">航天爱锐 · 数字员工专家系统</div>
+              <div class="footer-hint">CorpCLaw · 数字员工专家系统</div>
             </div>
           </div>
         </div>
@@ -490,7 +490,7 @@
         <!-- PDF Header -->
         <div class="pdf-header">
            <div class="pdf-logo-area">
-             <span class="pdf-logo-text">航天爱锐</span>
+             <span class="pdf-logo-text">CorpCLaw</span>
              <div class="pdf-title-group">
                <h1 class="pdf-main-title">智能化质量诊断报告</h1>
                <p class="pdf-sub-title">AERO-IRAY AI QUALITY DIAGNOSIS REPORT</p>
@@ -510,7 +510,7 @@
               {{ filter.improvementTarget || '通用性能优化与质量稳定性提升' }}
             </div>
             <div class="target-meta-pdf">
-              诊断单位：航天爱锐 · 企业数字员工系统
+              诊断单位：CorpCLaw · 企业数字员工系统
             </div>
           </div>
         </div>
@@ -546,10 +546,10 @@
         <div class="pdf-footer">
           <div class="pdf-footer-line"></div>
           <div class="pdf-footer-content">
-            <div class="pdf-footer-left">航天爱锐 - 生产数字专家系统</div>
+            <div class="pdf-footer-left">CorpCLaw - 生产数字专家系统</div>
             <div class="pdf-footer-right">第 1 页 / 共 2 页</div>
           </div>
-          <p class="pdf-footer-caveat">注：本报告由航天爱锐 AI 数字员工自动生成，仅供生产改进参考。</p>
+          <p class="pdf-footer-caveat">注：本报告由CorpCLaw AI 数字员工自动生成，仅供生产改进参考。</p>
         </div>
       </div>
 
@@ -558,7 +558,7 @@
         <!-- PDF Header Page 2 (Compact) -->
         <div class="pdf-header-compact">
           <div class="pdf-logo-area">
-            <span class="pdf-logo-text" style="font-size: 18px;">航天爱锐</span>
+            <span class="pdf-logo-text" style="font-size: 18px;">CorpCLaw</span>
           </div>
           <div class="pdf-title-compact" style="font-size: 13px; color: #64748b; font-weight: bold;">
             智能化质量诊断报告 (续)
@@ -613,10 +613,10 @@
         <div class="pdf-footer">
           <div class="pdf-footer-line"></div>
           <div class="pdf-footer-content">
-            <div class="pdf-footer-left">航天爱锐 - 生产数字专家系统</div>
+            <div class="pdf-footer-left">CorpCLaw - 生产数字专家系统</div>
             <div class="pdf-footer-right">第 2 页 / 共 2 页</div>
           </div>
-          <p class="pdf-footer-caveat">注：本报告由航天爱锐 AI 数字员工自动生成，仅供生产改进参考。</p>
+          <p class="pdf-footer-caveat">注：本报告由CorpCLaw AI 数字员工自动生成，仅供生产改进参考。</p>
         </div>
       </div>
     </div>
